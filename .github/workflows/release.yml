@@ -30,4 +30,6 @@ jobs:
           tag_name: v0.0.1
           name: LSENext v0.0.1
           prerelease: true
-          files: artifacts/*
+          files: |
+            artifacts/*.msi
+            artifacts/*.zip

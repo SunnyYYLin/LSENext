@@ -31,4 +31,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: lsenext-artifacts
-          path: artifacts/*
+          path: |
+            artifacts/*.msi
+            artifacts/*.zip
