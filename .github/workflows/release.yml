@@ -1,0 +1,31 @@
+name: Pre-release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  prerelease:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc,aarch64-pc-windows-msvc
+      - name: Test
+        run: cargo test --workspace
+      - name: Package x64
+        shell: pwsh
+        run: ./scripts/package.ps1 -Architecture x64
+      - name: Package arm64
+        shell: pwsh
+        run: ./scripts/package.ps1 -Architecture arm64
+      - name: Create GitHub pre-release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v0.0.1
+          name: LSENext v0.0.1
+          prerelease: true
+          files: artifacts/*.zip

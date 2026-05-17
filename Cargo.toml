@@ -1,0 +1,23 @@
+[workspace]
+members = [
+    "crates/lsenext-core",
+    "crates/lsenext-helper",
+    "crates/lsenext-shell",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.0.1"
+edition = "2021"
+license = "MIT"
+authors = ["LSENext contributors"]
+repository = "https://github.com/sunnylin/LSENext"
+
+[workspace.dependencies]
+anyhow = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "2.0"
+windows = "0.58"
+windows-core = "0.58"
+windows-sys = "0.59"

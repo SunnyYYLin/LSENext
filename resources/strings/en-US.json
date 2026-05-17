@@ -1,0 +1,10 @@
+{
+  "pick_source": "Pick Link Source",
+  "drop_symlink": "Drop Symbolic Link",
+  "drop_junction": "Drop Directory Junction",
+  "clear_source": "Clear Link Source",
+  "error_title": "LSENext",
+  "source_required": "Pick a link source before creating a link.",
+  "destination_exists": "The destination already exists.",
+  "junction_dirs_only": "Directory junctions can only target directories."
+}

@@ -1,0 +1,10 @@
+{
+  "pick_source": "选取链接源",
+  "drop_symlink": "创建符号链接",
+  "drop_junction": "创建目录联接",
+  "clear_source": "清除链接源",
+  "error_title": "LSENext",
+  "source_required": "请先选取链接源，再创建链接。",
+  "destination_exists": "目标位置已存在同名项目。",
+  "junction_dirs_only": "目录联接只能指向目录。"
+}
