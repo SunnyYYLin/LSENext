@@ -22,11 +22,13 @@ jobs:
         run: cargo build --workspace --release --target aarch64-pc-windows-msvc
       - name: Package x64
         shell: pwsh
-        run: ./scripts/package.ps1 -Architecture x64
+        run: |
+          dotnet tool restore
+          ./scripts/package.ps1 -Architecture x64
       - name: Package arm64
         shell: pwsh
         run: ./scripts/package.ps1 -Architecture arm64
       - uses: actions/upload-artifact@v4
         with:
           name: lsenext-artifacts
-          path: artifacts/*.zip
+          path: artifacts/*

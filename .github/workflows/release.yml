@@ -18,7 +18,9 @@ jobs:
         run: cargo test --workspace
       - name: Package x64
         shell: pwsh
-        run: ./scripts/package.ps1 -Architecture x64
+        run: |
+          dotnet tool restore
+          ./scripts/package.ps1 -Architecture x64
       - name: Package arm64
         shell: pwsh
         run: ./scripts/package.ps1 -Architecture arm64
@@ -28,4 +30,4 @@ jobs:
           tag_name: v0.0.1
           name: LSENext v0.0.1
           prerelease: true
-          files: artifacts/*.zip
+          files: artifacts/*

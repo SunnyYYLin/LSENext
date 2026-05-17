@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package
+    Name="LSENext"
+    Manufacturer="LSENext contributors"
+    Version="0.0.1.0"
+    UpgradeCode="58BDBD4A-3D93-4FB9-8BBD-30EBBBE0B001"
+    Scope="perMachine">
+    <MajorUpgrade DowngradeErrorMessage="A newer version of LSENext is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Feature Id="Main" Title="LSENext" Level="1">
+      <ComponentGroupRef Id="ProductComponents" />
+    </Feature>
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="LSENext" />
+    </StandardDirectory>
+  </Package>
+
+  <Fragment>
+    <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
+      <Component Id="HelperExe" Guid="58BDBD4A-3D93-4FB9-8BBD-30EBBBE0B101">
+        <File Id="HelperExeFile" Source="$(var.SourceDir)\lsenext-helper.exe" KeyPath="yes" />
+      </Component>
+      <Component Id="ShellDll" Guid="58BDBD4A-3D93-4FB9-8BBD-30EBBBE0B102">
+        <File Id="ShellDllFile" Source="$(var.SourceDir)\lsenext-shell.dll" KeyPath="yes" />
+      </Component>
+      <Component Id="ManifestFile" Guid="58BDBD4A-3D93-4FB9-8BBD-30EBBBE0B103">
+        <File Source="$(var.SourceDir)\packaging\AppxManifest.xml" KeyPath="yes" />
+      </Component>
+      <Component Id="InstallScripts" Guid="58BDBD4A-3D93-4FB9-8BBD-30EBBBE0B104">
+        <File Source="$(var.SourceDir)\packaging\install.ps1" KeyPath="yes" />
+        <File Source="$(var.SourceDir)\packaging\uninstall.ps1" />
+      </Component>
+      <Component Id="EnglishStrings" Guid="58BDBD4A-3D93-4FB9-8BBD-30EBBBE0B105">
+        <File Source="$(var.SourceDir)\resources\strings\en-US.json" KeyPath="yes" />
+      </Component>
+      <Component Id="ChineseStrings" Guid="58BDBD4A-3D93-4FB9-8BBD-30EBBBE0B106">
+        <File Source="$(var.SourceDir)\resources\strings\zh-CN.json" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+</Wix>

@@ -37,3 +37,17 @@ if (Test-Path $zip) {
 }
 Compress-Archive -Path (Join-Path $dist "*") -DestinationPath $zip
 Write-Host "Created $zip"
+
+$msi = Join-Path $repo "artifacts\LSENext-v0.0.1-$Architecture.msi"
+if (Test-Path $msi) {
+    Remove-Item -Force $msi
+}
+dotnet tool run wix build `
+    (Join-Path $repo "packaging\LSENext.wxs") `
+    -arch $Architecture `
+    -d "SourceDir=$dist" `
+    -out $msi
+if ($LASTEXITCODE -ne 0) {
+    throw "wix build failed for $Architecture"
+}
+Write-Host "Created $msi"
