@@ -8,6 +8,7 @@ authors.workspace = true
 [dependencies]
 anyhow.workspace = true
 lsenext-core = { path = "../lsenext-core" }
+windows-sys = { workspace = true, features = ["Win32_UI_WindowsAndMessaging"] }
 
 [[bin]]
 name = "lsenext-helper"

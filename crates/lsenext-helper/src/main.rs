@@ -19,13 +19,33 @@ fn main() -> Result<()> {
         "clear" => {
             lsenext_core::clear_state()?;
         }
+        "about" => {
+            show_about();
+        }
         _ => {
             bail!(
-                "usage: lsenext-helper <pick-source|drop-symlink|drop-junction|clear> [paths]"
+                "usage: lsenext-helper <pick-source|drop-symlink|drop-junction|clear|about> [paths]"
             );
         }
     }
     Ok(())
+}
+
+fn show_about() {
+    let title: Vec<u16> = "LSENext".encode_utf16().chain(Some(0)).collect();
+    let message: Vec<u16> =
+        "LSENext 0.0.1\nQuick symbolic link and directory junction creation."
+            .encode_utf16()
+            .chain(Some(0))
+            .collect();
+    unsafe {
+        windows_sys::Win32::UI::WindowsAndMessaging::MessageBoxW(
+            std::ptr::null_mut(),
+            message.as_ptr(),
+            title.as_ptr(),
+            windows_sys::Win32::UI::WindowsAndMessaging::MB_OK,
+        );
+    }
 }
 
 fn drop_links(kind: LinkKind, target: Option<String>) -> Result<()> {
