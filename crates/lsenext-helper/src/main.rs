@@ -1,3 +1,5 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 use anyhow::{bail, Context, Result};
 use lsenext_core::{create_link, load_state, save_sources, LinkKind};
 use std::env;
@@ -20,13 +22,11 @@ fn run() -> Result<()> {
                 bail!("at least one source path is required");
             }
             save_sources(&paths)?;
-            show_info("Link source picked.");
         }
         "drop-symlink" => drop_links(LinkKind::Symbolic, "drop-symlink", args.next())?,
         "drop-junction" => drop_links(LinkKind::Junction, "drop-junction", args.next())?,
         "clear" => {
             lsenext_core::clear_state()?;
-            show_info("Link source cleared.");
         }
         "about" => {
             show_about();
@@ -54,7 +54,6 @@ fn drop_links(kind: LinkKind, command: &str, target: Option<String>) -> Result<(
             return Err(err.into());
         }
     }
-    show_info("Link created successfully.");
     Ok(())
 }
 

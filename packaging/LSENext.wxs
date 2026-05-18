@@ -61,6 +61,7 @@
 
         <RegistryValue Root="HKLM" Key="Software\Classes\Directory\shell\LSENext.DropJunction" Name="MUIVerb" Value="Drop Directory Junction" Type="string" />
         <RegistryValue Root="HKLM" Key="Software\Classes\Directory\shell\LSENext.DropJunction" Name="Icon" Value="[INSTALLFOLDER]lsenext-helper.exe" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\Directory\shell\LSENext.DropJunction" Name="Extended" Value="" Type="string" />
         <RegistryValue Root="HKLM" Key="Software\Classes\Directory\shell\LSENext.DropJunction\command" Value="&quot;[INSTALLFOLDER]lsenext-helper.exe&quot; drop-junction &quot;%1&quot;" Type="string" />
 
         <RegistryValue Root="HKLM" Key="Software\Classes\Directory\shell\LSENext.ClearSource" Name="MUIVerb" Value="Clear Link Source" Type="string" />
@@ -73,6 +74,7 @@
 
         <RegistryValue Root="HKLM" Key="Software\Classes\Directory\Background\shell\LSENext.DropJunction" Name="MUIVerb" Value="Drop Directory Junction" Type="string" />
         <RegistryValue Root="HKLM" Key="Software\Classes\Directory\Background\shell\LSENext.DropJunction" Name="Icon" Value="[INSTALLFOLDER]lsenext-helper.exe" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\Classes\Directory\Background\shell\LSENext.DropJunction" Name="Extended" Value="" Type="string" />
         <RegistryValue Root="HKLM" Key="Software\Classes\Directory\Background\shell\LSENext.DropJunction\command" Value="&quot;[INSTALLFOLDER]lsenext-helper.exe&quot; drop-junction &quot;%V&quot;" Type="string" />
 
         <RegistryValue Root="HKLM" Key="Software\Classes\Directory\Background\shell\LSENext.ClearSource" Name="MUIVerb" Value="Clear Link Source" Type="string" />
