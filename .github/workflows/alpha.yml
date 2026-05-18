@@ -1,35 +1,43 @@
-name: Pre-release
+name: Alpha Pre-release
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  prerelease:
+  alpha:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-pc-windows-msvc,aarch64-pc-windows-msvc
+      - name: Compute alpha tag
+        shell: pwsh
+        run: |
+          $tag = "v0.0.1-alpha.${{ github.run_number }}"
+          "RELEASE_TAG=$tag" >> $env:GITHUB_ENV
       - name: Test
         run: cargo test --workspace
       - name: Package x64
         shell: pwsh
         run: |
           dotnet tool restore
-          ./scripts/package.ps1 -Architecture x64 -ReleaseTag v0.0.1
+          ./scripts/package.ps1 -Architecture x64 -ReleaseTag $env:RELEASE_TAG
       - name: Package arm64
         shell: pwsh
-        run: ./scripts/package.ps1 -Architecture arm64 -ReleaseTag v0.0.1
-      - name: Create GitHub pre-release
+        run: ./scripts/package.ps1 -Architecture arm64 -ReleaseTag $env:RELEASE_TAG
+      - name: Create GitHub alpha pre-release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v0.0.1
-          name: LSENext v0.0.1
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: LSENext ${{ env.RELEASE_TAG }}
           prerelease: true
+          generate_release_notes: true
           files: |
             artifacts/*.msi
             artifacts/*.zip

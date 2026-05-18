@@ -1,7 +1,8 @@
 param(
     [ValidateSet("x64", "arm64")]
     [string]$Architecture = "x64",
-    [string]$Configuration = "release"
+    [string]$Configuration = "release",
+    [string]$ReleaseTag = "v0.0.1"
 )
 
 $ErrorActionPreference = "Stop"
@@ -30,7 +31,8 @@ Copy-Item -Force -Path $shell -Destination (Join-Path $dist "lsenext-shell.dll")
 Copy-Item -Force -Recurse -Path (Join-Path $repo "resources") -Destination $dist
 Copy-Item -Force -Recurse -Path (Join-Path $repo "packaging") -Destination $dist
 
-$zip = Join-Path $repo "artifacts\LSENext-v0.0.1-$Architecture.zip"
+$artifactVersion = $ReleaseTag.TrimStart("v")
+$zip = Join-Path $repo "artifacts\LSENext-$artifactVersion-$Architecture.zip"
 New-Item -ItemType Directory -Force -Path (Split-Path $zip) | Out-Null
 if (Test-Path $zip) {
     Remove-Item -Force $zip
@@ -38,7 +40,7 @@ if (Test-Path $zip) {
 Compress-Archive -Path (Join-Path $dist "*") -DestinationPath $zip
 Write-Host "Created $zip"
 
-$msi = Join-Path $repo "artifacts\LSENext-v0.0.1-$Architecture.msi"
+$msi = Join-Path $repo "artifacts\LSENext-$artifactVersion-$Architecture.msi"
 if (Test-Path $msi) {
     Remove-Item -Force $msi
 }
