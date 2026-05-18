@@ -42,8 +42,10 @@ $msi = Join-Path $repo "artifacts\LSENext-v0.0.1-$Architecture.msi"
 if (Test-Path $msi) {
     Remove-Item -Force $msi
 }
+dotnet tool run wix extension add WixToolset.UI.wixext/5.0.2 | Out-Null
 dotnet tool run wix build `
     (Join-Path $repo "packaging\LSENext.wxs") `
+    -ext WixToolset.UI.wixext `
     -arch $Architecture `
     -d "SourceDir=$dist" `
     -out $msi

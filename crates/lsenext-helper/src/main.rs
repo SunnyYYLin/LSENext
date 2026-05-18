@@ -1,5 +1,5 @@
 use anyhow::{bail, Context, Result};
-use lsenext_core::{create_link, load_state, LinkKind};
+use lsenext_core::{create_link, load_state, save_sources, LinkKind};
 use std::env;
 use std::path::PathBuf;
 
@@ -7,6 +7,13 @@ fn main() -> Result<()> {
     let mut args = env::args().skip(1);
     let command = args.next().unwrap_or_default();
     match command.as_str() {
+        "pick-source" => {
+            let paths = args.map(PathBuf::from).collect::<Vec<_>>();
+            if paths.is_empty() {
+                bail!("at least one source path is required");
+            }
+            save_sources(&paths)?;
+        }
         "drop-symlink" => drop_links(LinkKind::Symbolic, args.next())?,
         "drop-junction" => drop_links(LinkKind::Junction, args.next())?,
         "clear" => {
@@ -14,7 +21,7 @@ fn main() -> Result<()> {
         }
         _ => {
             bail!(
-                "usage: lsenext-helper <drop-symlink|drop-junction|clear> <target-directory>"
+                "usage: lsenext-helper <pick-source|drop-symlink|drop-junction|clear> [paths]"
             );
         }
     }
