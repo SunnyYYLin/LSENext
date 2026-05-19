@@ -3,7 +3,7 @@
 use lsenext_core::{clear_state, create_link, load_state, save_sources, LinkKind};
 use std::ffi::c_void;
 use std::path::PathBuf;
-use windows::core::{implement, GUID, HRESULT, Interface, PCSTR, PCWSTR, PWSTR};
+use windows::core::{implement, Interface, GUID, HRESULT, PCSTR, PCWSTR, PWSTR};
 use windows::Win32::Foundation::{
     BOOL, CLASS_E_CLASSNOTAVAILABLE, CLASS_E_NOAGGREGATION, E_FAIL, E_NOTIMPL, E_OUTOFMEMORY,
     E_POINTER, HINSTANCE, HWND, S_FALSE,
@@ -13,13 +13,12 @@ use windows::Win32::System::Com::{
 };
 use windows::Win32::System::LibraryLoader::DisableThreadLibraryCalls;
 use windows::Win32::UI::Shell::{
-    ShellExecuteW, IEnumExplorerCommand, IExplorerCommand, IExplorerCommand_Impl, IShellItemArray,
-    ECS_DISABLED, ECS_ENABLED, ECS_HIDDEN, ECF_DEFAULT, SIGDN_FILESYSPATH,
+    IEnumExplorerCommand, IExplorerCommand, IExplorerCommand_Impl, IShellItemArray, ShellExecuteW,
+    ECF_DEFAULT, ECS_DISABLED, ECS_ENABLED, ECS_HIDDEN, SIGDN_FILESYSPATH,
 };
-use windows::Win32::UI::WindowsAndMessaging::{MessageBoxW, SW_SHOWNORMAL, MB_ICONERROR, MB_OK};
+use windows::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_ICONERROR, MB_OK, SW_SHOWNORMAL};
 
-pub const CLSID_LSENEXT_PICK_SOURCE: GUID =
-    GUID::from_u128(0x32ad61d5_1919_4582_95dc_d9eb0bb6e001);
+pub const CLSID_LSENEXT_PICK_SOURCE: GUID = GUID::from_u128(0x32ad61d5_1919_4582_95dc_d9eb0bb6e001);
 pub const CLSID_LSENEXT_DROP_SYMLINK: GUID =
     GUID::from_u128(0x32ad61d5_1919_4582_95dc_d9eb0bb6e002);
 pub const CLSID_LSENEXT_DROP_JUNCTION: GUID =
@@ -81,11 +80,7 @@ impl IExplorerCommand_Impl for ExplorerCommand_Impl {
                     ECS_DISABLED.0
                 }
             }
-            CommandKind::DropJunction => match load_state().ok().flatten() {
-                Some(state) if state.sources.iter().all(|source| source.is_dir) => ECS_ENABLED.0,
-                Some(_) => ECS_HIDDEN.0,
-                None => ECS_DISABLED.0,
-            },
+            CommandKind::DropJunction => junction_state(),
         };
         Ok(state as u32)
     }
@@ -101,7 +96,9 @@ impl IExplorerCommand_Impl for ExplorerCommand_Impl {
                     show_error(&err);
                     windows::core::Error::from(E_FAIL)
                 })?;
-                save_sources(&paths).map(|_| ()).map_err(|err| err.to_string())
+                save_sources(&paths)
+                    .map(|_| ())
+                    .map_err(|err| err.to_string())
             }
             CommandKind::DropSymbolic => drop_links(items, LinkKind::Symbolic),
             CommandKind::DropJunction => drop_links(items, LinkKind::Junction),
@@ -243,6 +240,18 @@ fn drop_links(items: Option<&IShellItemArray>, kind: LinkKind) -> Result<(), Str
     Ok(())
 }
 
+fn junction_state() -> i32 {
+    junction_state_for(load_state().ok().flatten().as_ref())
+}
+
+fn junction_state_for(state: Option<&lsenext_core::SelectionState>) -> i32 {
+    match state {
+        Some(state) if state.sources.iter().all(|source| source.is_dir) => ECS_ENABLED.0,
+        Some(_) => ECS_HIDDEN.0,
+        None => ECS_DISABLED.0,
+    }
+}
+
 fn should_try_elevated(error: &lsenext_core::links::LinkError) -> bool {
     match error {
         lsenext_core::links::LinkError::CreateFailed { error, .. } => {
@@ -264,7 +273,11 @@ fn run_elevated_helper(kind: LinkKind, target: &std::path::Path) -> Result<(), S
     };
     let args = format!("{} \"{}\"", command, target.display());
     let verb: Vec<u16> = "runas".encode_utf16().chain(Some(0)).collect();
-    let file: Vec<u16> = helper.to_string_lossy().encode_utf16().chain(Some(0)).collect();
+    let file: Vec<u16> = helper
+        .to_string_lossy()
+        .encode_utf16()
+        .chain(Some(0))
+        .collect();
     let params: Vec<u16> = args.encode_utf16().chain(Some(0)).collect();
     let result = unsafe {
         ShellExecuteW(
@@ -277,7 +290,10 @@ fn run_elevated_helper(kind: LinkKind, target: &std::path::Path) -> Result<(), S
         )
     };
     if result.0 as isize <= 32 {
-        Err(format!("ShellExecuteW failed with code {}", result.0 as isize))
+        Err(format!(
+            "ShellExecuteW failed with code {}",
+            result.0 as isize
+        ))
     } else {
         Ok(())
     }
@@ -323,5 +339,33 @@ fn show_error(message: &str) {
             PCWSTR(title.as_ptr()),
             MB_OK | MB_ICONERROR,
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn junction_state_hides_when_mixed_sources_are_picked() {
+        let state = lsenext_core::SelectionState {
+            picked_at_unix: 1,
+            sources: vec![
+                lsenext_core::PickedSource {
+                    path: PathBuf::from(r"C:\folder"),
+                    is_dir: true,
+                },
+                lsenext_core::PickedSource {
+                    path: PathBuf::from(r"C:\file.txt"),
+                    is_dir: false,
+                },
+            ],
+        };
+        assert_eq!(junction_state_for(Some(&state)), ECS_HIDDEN.0);
+    }
+
+    #[test]
+    fn junction_state_disables_without_state() {
+        assert_eq!(junction_state_for(None), ECS_DISABLED.0);
     }
 }

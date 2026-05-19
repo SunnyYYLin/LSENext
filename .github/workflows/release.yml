@@ -23,7 +23,9 @@ jobs:
           ./scripts/package.ps1 -Architecture x64 -ReleaseTag v0.0.1
       - name: Package arm64
         shell: pwsh
-        run: ./scripts/package.ps1 -Architecture arm64 -ReleaseTag v0.0.1
+        run: |
+          dotnet tool restore
+          ./scripts/package.ps1 -Architecture arm64 -ReleaseTag v0.0.1
       - name: Create GitHub pre-release
         uses: softprops/action-gh-release@v2
         with:

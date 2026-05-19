@@ -76,13 +76,13 @@ fn create_platform_link(
                 error,
             })
         }
-        LinkKind::Junction => junction::create(&source.path, destination).map_err(|error| {
-            LinkError::CreateFailed {
+        LinkKind::Junction => {
+            junction::create(&source.path, destination).map_err(|error| LinkError::CreateFailed {
                 source: source.path.clone(),
                 destination: destination.to_path_buf(),
                 error,
-            }
-        }),
+            })
+        }
     }
 }
 
@@ -108,8 +108,8 @@ mod junction {
     use std::fs;
     use std::io;
     use std::mem::zeroed;
-    use std::os::windows::fs::OpenOptionsExt;
     use std::os::windows::ffi::OsStrExt;
+    use std::os::windows::fs::OpenOptionsExt;
     use std::os::windows::io::AsRawHandle;
     use std::path::Path;
     use windows_sys::Win32::Foundation::HANDLE;
@@ -145,7 +145,11 @@ mod junction {
 
     fn set_mount_point(source: &Path, destination: &Path) -> io::Result<()> {
         let substitute = native_target(source)?;
-        let print = source.as_os_str().encode_wide().chain(Some(0)).collect::<Vec<_>>();
+        let print = source
+            .as_os_str()
+            .encode_wide()
+            .chain(Some(0))
+            .collect::<Vec<_>>();
 
         let mut buffer: ReparseDataBuffer = unsafe { zeroed() };
         buffer.reparse_tag = IO_REPARSE_TAG_MOUNT_POINT;
@@ -159,10 +163,14 @@ mod junction {
         cursor += substitute.len();
         buffer.path_buffer[cursor..cursor + print.len()].copy_from_slice(&print);
 
-        buffer.reparse_data_length = 8 + buffer.substitute_name_length + 2 + buffer.print_name_length + 2;
+        buffer.reparse_data_length =
+            8 + buffer.substitute_name_length + 2 + buffer.print_name_length + 2;
         let total_size = 8 + buffer.reparse_data_length as u32;
         if total_size > MAXIMUM_REPARSE_DATA_BUFFER_SIZE {
-            return Err(io::Error::new(io::ErrorKind::InvalidInput, "junction target is too long"));
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "junction target is too long",
+            ));
         }
 
         let file = std::fs::OpenOptions::new()
@@ -244,5 +252,25 @@ mod tests {
         };
         let err = create_link(LinkKind::Junction, &source, Path::new(r"C:\missing")).unwrap_err();
         assert!(matches!(err, LinkError::JunctionNeedsDirectory(_)));
+    }
+
+    #[test]
+    fn symbolic_links_allow_files_and_directories() {
+        let file = PickedSource {
+            path: PathBuf::from(r"C:\src\file.txt"),
+            is_dir: false,
+        };
+        let dir = PickedSource {
+            path: PathBuf::from(r"C:\src\folder"),
+            is_dir: true,
+        };
+        assert!(matches!(
+            create_link(LinkKind::Symbolic, &file, Path::new(r"C:\missing")),
+            Err(LinkError::MissingTargetDirectory(_))
+        ));
+        assert!(matches!(
+            create_link(LinkKind::Symbolic, &dir, Path::new(r"C:\missing")),
+            Err(LinkError::MissingTargetDirectory(_))
+        ));
     }
 }

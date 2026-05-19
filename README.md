@@ -14,8 +14,11 @@ LSENext is a modern Windows 11-oriented Link Shell Extension successor focused o
 
 ```powershell
 cargo test --workspace
-.\scripts\package.ps1 -Architecture x64
-.\scripts\package.ps1 -Architecture arm64
 ```
 
-Artifacts are written to `artifacts\`.
+Packaging is done in GitHub Actions:
+
+- `.github/workflows/alpha.yml` for alpha pre-releases
+- `.github/workflows/release.yml` for manual pre-releases
+
+Artifacts are published from the workflow run and written to `artifacts\` during the job.
