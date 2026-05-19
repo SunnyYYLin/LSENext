@@ -45,6 +45,9 @@ fn drop_links(kind: LinkKind, command: &str, target: Option<String>) -> Result<(
         .map(PathBuf::from)
         .context("target directory argument is required")?;
     let state = load_state()?.context("no picked LSENext source is stored")?;
+    if kind == LinkKind::Junction && state.sources.iter().any(|source| !source.is_dir) {
+        bail!("Directory junctions can only be created from picked directory sources.");
+    }
     for source in &state.sources {
         if let Err(err) = create_link(kind, source, &target) {
             if should_retry_elevated(&err) {
