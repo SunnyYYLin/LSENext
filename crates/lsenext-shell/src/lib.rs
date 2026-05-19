@@ -2,23 +2,25 @@
 
 use lsenext_core::{clear_state, create_link, load_state, save_sources, LinkKind};
 use std::ffi::c_void;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use windows::core::{implement, Interface, GUID, HRESULT, PCSTR, PCWSTR, PWSTR};
 use windows::Win32::Foundation::{
     BOOL, CLASS_E_CLASSNOTAVAILABLE, CLASS_E_NOAGGREGATION, E_FAIL, E_NOTIMPL, E_OUTOFMEMORY,
     E_POINTER, HINSTANCE, HWND, S_FALSE,
 };
-use windows::Win32::System::Com::{
-    CoTaskMemAlloc, CoTaskMemFree, IBindCtx, IClassFactory, IClassFactory_Impl,
-};
+use windows::Win32::System::Com::{CoTaskMemAlloc, CoTaskMemFree, IBindCtx, IClassFactory, IClassFactory_Impl};
 use windows::Win32::System::LibraryLoader::DisableThreadLibraryCalls;
 use windows::Win32::UI::Shell::{
-    IEnumExplorerCommand, IExplorerCommand, IExplorerCommand_Impl, IShellItemArray, ShellExecuteW,
-    ECF_DEFAULT, ECS_DISABLED, ECS_ENABLED, ECS_HIDDEN, SIGDN_FILESYSPATH,
+    ECF_DEFAULT, ECS_DISABLED, ECS_ENABLED, ECS_HIDDEN, IEnumExplorerCommand,
+    IEnumExplorerCommand_Impl, IExplorerCommand, IExplorerCommand_Impl, IShellItemArray,
+    ShellExecuteW, SIGDN_FILESYSPATH,
 };
 use windows::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_ICONERROR, MB_OK, SW_SHOWNORMAL};
 
-pub const CLSID_LSENEXT_PICK_SOURCE: GUID = GUID::from_u128(0x32ad61d5_1919_4582_95dc_d9eb0bb6e001);
+pub const CLSID_LSENEXT_ROOT: GUID =
+    GUID::from_u128(0x32ad61d5_1919_4582_95dc_d9eb0bb6e000);
+pub const CLSID_LSENEXT_PICK_SOURCE: GUID =
+    GUID::from_u128(0x32ad61d5_1919_4582_95dc_d9eb0bb6e001);
 pub const CLSID_LSENEXT_DROP_SYMLINK: GUID =
     GUID::from_u128(0x32ad61d5_1919_4582_95dc_d9eb0bb6e002);
 pub const CLSID_LSENEXT_DROP_JUNCTION: GUID =
@@ -26,7 +28,7 @@ pub const CLSID_LSENEXT_DROP_JUNCTION: GUID =
 pub const CLSID_LSENEXT_CLEAR_SOURCE: GUID =
     GUID::from_u128(0x32ad61d5_1919_4582_95dc_d9eb0bb6e004);
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum CommandKind {
     PickSource,
     DropSymbolic,
@@ -35,11 +37,62 @@ enum CommandKind {
 }
 
 #[implement(IExplorerCommand)]
-struct ExplorerCommand {
+struct RootCommand;
+
+#[implement(IExplorerCommand)]
+struct MenuCommand {
     kind: CommandKind,
 }
 
-impl IExplorerCommand_Impl for ExplorerCommand_Impl {
+#[implement(IEnumExplorerCommand)]
+struct CommandEnum {
+    commands: Vec<IExplorerCommand>,
+    index: std::cell::Cell<usize>,
+}
+
+impl IExplorerCommand_Impl for RootCommand_Impl {
+    fn GetTitle(&self, _items: Option<&IShellItemArray>) -> windows::core::Result<PWSTR> {
+        alloc_pwstr("LSENext")
+    }
+
+    fn GetIcon(&self, _items: Option<&IShellItemArray>) -> windows::core::Result<PWSTR> {
+        Ok(PWSTR::null())
+    }
+
+    fn GetToolTip(&self, _items: Option<&IShellItemArray>) -> windows::core::Result<PWSTR> {
+        alloc_pwstr("LSENext")
+    }
+
+    fn GetCanonicalName(&self) -> windows::core::Result<GUID> {
+        Ok(CLSID_LSENEXT_ROOT)
+    }
+
+    fn GetState(
+        &self,
+        _items: Option<&IShellItemArray>,
+        _ok_to_be_slow: BOOL,
+    ) -> windows::core::Result<u32> {
+        Ok(ECS_ENABLED.0 as u32)
+    }
+
+    fn Invoke(
+        &self,
+        _items: Option<&IShellItemArray>,
+        _bind_ctx: Option<&IBindCtx>,
+    ) -> windows::core::Result<()> {
+        Ok(())
+    }
+
+    fn GetFlags(&self) -> windows::core::Result<u32> {
+        Ok(ECF_DEFAULT.0 as u32 | windows::Win32::UI::Shell::ECF_HASSUBCOMMANDS.0 as u32)
+    }
+
+    fn EnumSubCommands(&self) -> windows::core::Result<IEnumExplorerCommand> {
+        enumerate_commands()
+    }
+}
+
+impl IExplorerCommand_Impl for MenuCommand_Impl {
     fn GetTitle(&self, _items: Option<&IShellItemArray>) -> windows::core::Result<PWSTR> {
         alloc_pwstr(match self.kind {
             CommandKind::PickSource => "Pick Link Source",
@@ -80,7 +133,13 @@ impl IExplorerCommand_Impl for ExplorerCommand_Impl {
                     ECS_DISABLED.0
                 }
             }
-            CommandKind::DropJunction => junction_state(),
+            CommandKind::DropJunction => {
+                if junction_available() {
+                    ECS_ENABLED.0
+                } else {
+                    ECS_HIDDEN.0
+                }
+            }
         };
         Ok(state as u32)
     }
@@ -90,35 +149,23 @@ impl IExplorerCommand_Impl for ExplorerCommand_Impl {
         items: Option<&IShellItemArray>,
         _bind_ctx: Option<&IBindCtx>,
     ) -> windows::core::Result<()> {
-        let result = match self.kind {
-            CommandKind::PickSource => {
-                let paths = shell_item_paths(items).map_err(|err| {
-                    show_error(&err);
-                    windows::core::Error::from(E_FAIL)
-                })?;
-                save_sources(&paths)
-                    .map(|_| ())
-                    .map_err(|err| err.to_string())
-            }
+        let result: Result<(), String> = match self.kind {
+            CommandKind::PickSource => shell_item_paths(items)
+                .map_err(|err| err.message().to_string())
+                .and_then(|paths| save_sources(&paths).map(|_| ()).map_err(|err| err.to_string())),
             CommandKind::DropSymbolic => drop_links(items, LinkKind::Symbolic),
             CommandKind::DropJunction => drop_links(items, LinkKind::Junction),
-            CommandKind::ClearSource => clear_state().map_err(|err| err.to_string()),
+            CommandKind::ClearSource => clear_state().map(|_| ()).map_err(|err| err.to_string()),
         };
 
-        if let Err(message) = result {
-            show_error(&message);
-            return Err(E_FAIL.into());
-        }
-        Ok(())
+        result.map_err(|err| {
+            show_error(&err);
+            E_FAIL.into()
+        })
     }
 
     fn GetFlags(&self) -> windows::core::Result<u32> {
-        Ok(match self.kind {
-            CommandKind::PickSource
-            | CommandKind::DropSymbolic
-            | CommandKind::DropJunction
-            | CommandKind::ClearSource => ECF_DEFAULT.0 as u32,
-        })
+        Ok(ECF_DEFAULT.0 as u32)
     }
 
     fn EnumSubCommands(&self) -> windows::core::Result<IEnumExplorerCommand> {
@@ -126,10 +173,68 @@ impl IExplorerCommand_Impl for ExplorerCommand_Impl {
     }
 }
 
-#[implement(IClassFactory)]
-struct ClassFactory {
-    kind: CommandKind,
+impl IEnumExplorerCommand_Impl for CommandEnum_Impl {
+    fn Next(
+        &self,
+        celt: u32,
+        puicommand: *mut Option<IExplorerCommand>,
+        pceltfetched: *mut u32,
+    ) -> HRESULT {
+        if puicommand.is_null() {
+            return E_POINTER;
+        }
+
+        let start = self.index.get();
+        let remaining = self.commands.len().saturating_sub(start);
+        let take = remaining.min(celt as usize);
+
+        unsafe {
+            for slot in 0..take {
+                *puicommand.add(slot) = Some(self.commands[start + slot].clone());
+            }
+        }
+
+        let fetched = take as u32;
+        self.index.set(start + take);
+        if !pceltfetched.is_null() {
+            unsafe {
+                *pceltfetched = fetched;
+            }
+        }
+
+        if fetched == celt {
+            windows::core::HRESULT(0)
+        } else {
+            S_FALSE
+        }
+    }
+
+    fn Skip(&self, celt: u32) -> windows::core::Result<()> {
+        let next = self.index.get().saturating_add(celt as usize);
+        if next <= self.commands.len() {
+            self.index.set(next);
+            Ok(())
+        } else {
+            Err(E_FAIL.into())
+        }
+    }
+
+    fn Reset(&self) -> windows::core::Result<()> {
+        self.index.set(0);
+        Ok(())
+    }
+
+    fn Clone(&self) -> windows::core::Result<IEnumExplorerCommand> {
+        Ok(CommandEnum {
+            commands: self.commands.clone(),
+            index: std::cell::Cell::new(self.index.get()),
+        }
+        .into())
+    }
 }
+
+#[implement(IClassFactory)]
+struct ClassFactory;
 
 impl IClassFactory_Impl for ClassFactory_Impl {
     fn CreateInstance(
@@ -148,7 +253,7 @@ impl IClassFactory_Impl for ClassFactory_Impl {
             *object = std::ptr::null_mut();
         }
 
-        let command: IExplorerCommand = ExplorerCommand { kind: self.kind }.into();
+        let command: IExplorerCommand = RootCommand.into();
         unsafe {
             command.query(riid, object).ok()?;
         }
@@ -190,17 +295,12 @@ pub extern "system" fn DllGetClassObject(
         *object = std::ptr::null_mut();
     }
 
-    let kind = unsafe {
-        match *rclsid {
-            CLSID_LSENEXT_PICK_SOURCE => CommandKind::PickSource,
-            CLSID_LSENEXT_DROP_SYMLINK => CommandKind::DropSymbolic,
-            CLSID_LSENEXT_DROP_JUNCTION => CommandKind::DropJunction,
-            CLSID_LSENEXT_CLEAR_SOURCE => CommandKind::ClearSource,
-            _ => return CLASS_E_CLASSNOTAVAILABLE,
-        }
-    };
+    let is_root = unsafe { *rclsid == CLSID_LSENEXT_ROOT };
+    if !is_root {
+        return CLASS_E_CLASSNOTAVAILABLE;
+    }
 
-    let factory: IClassFactory = ClassFactory { kind }.into();
+    let factory: IClassFactory = ClassFactory.into();
     unsafe { factory.query(riid, object).ok().into() }
 }
 
@@ -219,8 +319,39 @@ pub extern "system" fn LSENextVersion() -> PCSTR {
     PCSTR(c"LSENext 0.0.1".as_ptr() as _)
 }
 
+fn enumerate_commands() -> windows::core::Result<IEnumExplorerCommand> {
+    let mut commands = vec![MenuCommand { kind: CommandKind::PickSource }.into()];
+
+    if has_source_state() {
+        commands.push(MenuCommand { kind: CommandKind::DropSymbolic }.into());
+        if junction_available() {
+            commands.push(MenuCommand { kind: CommandKind::DropJunction }.into());
+        }
+        commands.push(MenuCommand { kind: CommandKind::ClearSource }.into());
+    }
+
+    Ok(CommandEnum {
+        commands,
+        index: std::cell::Cell::new(0),
+    }
+    .into())
+}
+
+fn has_source_state() -> bool {
+    load_state().ok().flatten().is_some()
+}
+
+fn junction_available() -> bool {
+    load_state()
+        .ok()
+        .flatten()
+        .map(|state| state.sources.iter().all(|source| source.is_dir))
+        .unwrap_or(false)
+}
+
 fn drop_links(items: Option<&IShellItemArray>, kind: LinkKind) -> Result<(), String> {
-    let target = shell_item_paths(items)?
+    let target = shell_item_paths(items)
+        .map_err(|err| err.message().to_string())?
         .into_iter()
         .next()
         .ok_or_else(|| "target directory is required".to_string())?;
@@ -240,18 +371,6 @@ fn drop_links(items: Option<&IShellItemArray>, kind: LinkKind) -> Result<(), Str
     Ok(())
 }
 
-fn junction_state() -> i32 {
-    junction_state_for(load_state().ok().flatten().as_ref())
-}
-
-fn junction_state_for(state: Option<&lsenext_core::SelectionState>) -> i32 {
-    match state {
-        Some(state) if state.sources.iter().all(|source| source.is_dir) => ECS_ENABLED.0,
-        Some(_) => ECS_HIDDEN.0,
-        None => ECS_DISABLED.0,
-    }
-}
-
 fn should_try_elevated(error: &lsenext_core::links::LinkError) -> bool {
     match error {
         lsenext_core::links::LinkError::CreateFailed { error, .. } => {
@@ -261,7 +380,7 @@ fn should_try_elevated(error: &lsenext_core::links::LinkError) -> bool {
     }
 }
 
-fn run_elevated_helper(kind: LinkKind, target: &std::path::Path) -> Result<(), String> {
+fn run_elevated_helper(kind: LinkKind, target: &Path) -> Result<(), String> {
     let exe = std::env::current_exe().map_err(|err| err.to_string())?;
     let helper = exe
         .parent()
@@ -290,24 +409,20 @@ fn run_elevated_helper(kind: LinkKind, target: &std::path::Path) -> Result<(), S
         )
     };
     if result.0 as isize <= 32 {
-        Err(format!(
-            "ShellExecuteW failed with code {}",
-            result.0 as isize
-        ))
+        Err(format!("ShellExecuteW failed with code {}", result.0 as isize))
     } else {
         Ok(())
     }
 }
 
-fn shell_item_paths(items: Option<&IShellItemArray>) -> Result<Vec<PathBuf>, String> {
-    let items = items.ok_or_else(|| "Explorer did not provide a selected item.".to_string())?;
-    let count = unsafe { items.GetCount() }.map_err(|err| err.message().to_string())?;
+fn shell_item_paths(items: Option<&IShellItemArray>) -> windows::core::Result<Vec<PathBuf>> {
+    let items = items.ok_or_else(|| windows::core::Error::new(E_FAIL, "Explorer did not provide a selected item."))?;
+    let count = unsafe { items.GetCount() }?;
     let mut paths = Vec::with_capacity(count as usize);
     for index in 0..count {
-        let item = unsafe { items.GetItemAt(index) }.map_err(|err| err.message().to_string())?;
-        let raw = unsafe { item.GetDisplayName(SIGDN_FILESYSPATH) }
-            .map_err(|err| err.message().to_string())?;
-        let path = unsafe { raw.to_string() }.map_err(|err| err.to_string())?;
+        let item = unsafe { items.GetItemAt(index) }?;
+        let raw = unsafe { item.GetDisplayName(SIGDN_FILESYSPATH) }?;
+        let path = unsafe { raw.to_string() }?;
         unsafe {
             CoTaskMemFree(Some(raw.as_ptr() as _));
         }
@@ -339,33 +454,5 @@ fn show_error(message: &str) {
             PCWSTR(title.as_ptr()),
             MB_OK | MB_ICONERROR,
         );
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn junction_state_hides_when_mixed_sources_are_picked() {
-        let state = lsenext_core::SelectionState {
-            picked_at_unix: 1,
-            sources: vec![
-                lsenext_core::PickedSource {
-                    path: PathBuf::from(r"C:\folder"),
-                    is_dir: true,
-                },
-                lsenext_core::PickedSource {
-                    path: PathBuf::from(r"C:\file.txt"),
-                    is_dir: false,
-                },
-            ],
-        };
-        assert_eq!(junction_state_for(Some(&state)), ECS_HIDDEN.0);
-    }
-
-    #[test]
-    fn junction_state_disables_without_state() {
-        assert_eq!(junction_state_for(None), ECS_DISABLED.0);
     }
 }
