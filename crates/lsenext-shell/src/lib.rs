@@ -234,7 +234,15 @@ impl IEnumExplorerCommand_Impl for CommandEnum_Impl {
 }
 
 #[implement(IClassFactory)]
-struct ClassFactory;
+struct ClassFactory {
+    kind: FactoryKind,
+}
+
+#[derive(Clone, Copy)]
+enum FactoryKind {
+    Root,
+    Menu(CommandKind),
+}
 
 impl IClassFactory_Impl for ClassFactory_Impl {
     fn CreateInstance(
@@ -253,7 +261,10 @@ impl IClassFactory_Impl for ClassFactory_Impl {
             *object = std::ptr::null_mut();
         }
 
-        let command: IExplorerCommand = RootCommand.into();
+        let command: IExplorerCommand = match self.kind {
+            FactoryKind::Root => RootCommand.into(),
+            FactoryKind::Menu(kind) => MenuCommand { kind }.into(),
+        };
         unsafe {
             command.query(riid, object).ok()?;
         }
@@ -295,12 +306,18 @@ pub extern "system" fn DllGetClassObject(
         *object = std::ptr::null_mut();
     }
 
-    let is_root = unsafe { *rclsid == CLSID_LSENEXT_ROOT };
-    if !is_root {
-        return CLASS_E_CLASSNOTAVAILABLE;
-    }
+    let kind = unsafe {
+        match *rclsid {
+            CLSID_LSENEXT_ROOT => FactoryKind::Root,
+            CLSID_LSENEXT_PICK_SOURCE => FactoryKind::Menu(CommandKind::PickSource),
+            CLSID_LSENEXT_DROP_SYMLINK => FactoryKind::Menu(CommandKind::DropSymbolic),
+            CLSID_LSENEXT_DROP_JUNCTION => FactoryKind::Menu(CommandKind::DropJunction),
+            CLSID_LSENEXT_CLEAR_SOURCE => FactoryKind::Menu(CommandKind::ClearSource),
+            _ => return CLASS_E_CLASSNOTAVAILABLE,
+        }
+    };
 
-    let factory: IClassFactory = ClassFactory.into();
+    let factory: IClassFactory = ClassFactory { kind }.into();
     unsafe { factory.query(riid, object).ok().into() }
 }
 
