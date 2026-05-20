@@ -119,6 +119,8 @@ fn menu_subcommands(state: Option<&SelectionState>) -> (String, String) {
     const PICK_SOURCE: &str = "LSENext.PickSource";
     const DROP_SYMBOLIC: &str = "LSENext.DropSymbolic";
     const DROP_JUNCTION: &str = "LSENext.DropJunction";
+    const BACKGROUND_DROP_SYMBOLIC: &str = "LSENext.BackgroundDropSymbolic";
+    const BACKGROUND_DROP_JUNCTION: &str = "LSENext.BackgroundDropJunction";
     const CLEAR_SOURCE: &str = "LSENext.ClearSource";
 
     let can_junction = state
@@ -135,9 +137,14 @@ fn menu_subcommands(state: Option<&SelectionState>) -> (String, String) {
     };
 
     let background_commands = if has_state && can_junction {
-        [DROP_SYMBOLIC, DROP_JUNCTION, CLEAR_SOURCE].join(";")
+        [
+            BACKGROUND_DROP_SYMBOLIC,
+            BACKGROUND_DROP_JUNCTION,
+            CLEAR_SOURCE,
+        ]
+        .join(";")
     } else if has_state {
-        [DROP_SYMBOLIC, CLEAR_SOURCE].join(";")
+        [BACKGROUND_DROP_SYMBOLIC, CLEAR_SOURCE].join(";")
     } else {
         CLEAR_SOURCE.to_string()
     };
@@ -251,7 +258,10 @@ mod tests {
             directory,
             "LSENext.PickSource;LSENext.DropSymbolic;LSENext.ClearSource"
         );
-        assert_eq!(background, "LSENext.DropSymbolic;LSENext.ClearSource");
+        assert_eq!(
+            background,
+            "LSENext.BackgroundDropSymbolic;LSENext.ClearSource"
+        );
     }
 
     #[test]
@@ -270,7 +280,7 @@ mod tests {
         );
         assert_eq!(
             background,
-            "LSENext.DropSymbolic;LSENext.DropJunction;LSENext.ClearSource"
+            "LSENext.BackgroundDropSymbolic;LSENext.BackgroundDropJunction;LSENext.ClearSource"
         );
     }
 }
