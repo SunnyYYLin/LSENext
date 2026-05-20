@@ -19,6 +19,8 @@ pub enum StateError {
     },
     #[error("failed to serialize state: {0}")]
     Json(#[from] serde_json::Error),
+    #[error("failed to update Explorer menu registration while {operation}, Win32 error {code}")]
+    Registry { operation: &'static str, code: u32 },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -71,6 +73,7 @@ pub fn save_sources(paths: &[PathBuf]) -> Result<SelectionState, StateError> {
     }
     let json = serde_json::to_vec_pretty(&state)?;
     fs::write(&path, json).map_err(|source| StateError::Io { path, source })?;
+    sync_explorer_menu(Some(&state))?;
     Ok(state)
 }
 
@@ -89,8 +92,8 @@ pub fn load_state() -> Result<Option<SelectionState>, StateError> {
 pub fn clear_state() -> Result<(), StateError> {
     let path = state_file()?;
     match fs::remove_file(&path) {
-        Ok(()) => Ok(()),
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Ok(()) => sync_explorer_menu(None),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => sync_explorer_menu(None),
         Err(source) => Err(StateError::Io { path, source }),
     }
 }
@@ -104,6 +107,115 @@ pub fn validate_target_dir(path: &Path) -> Result<(), StateError> {
         Ok(())
     } else {
         Err(StateError::MissingSource(path.to_path_buf()))
+    }
+}
+
+fn sync_explorer_menu(state: Option<&SelectionState>) -> Result<(), StateError> {
+    let (directory_commands, background_commands) = menu_subcommands(state);
+    platform::sync_explorer_menu(&directory_commands, &background_commands)
+}
+
+fn menu_subcommands(state: Option<&SelectionState>) -> (String, String) {
+    const PICK_SOURCE: &str = "LSENext.PickSource";
+    const DROP_SYMBOLIC: &str = "LSENext.DropSymbolic";
+    const DROP_JUNCTION: &str = "LSENext.DropJunction";
+    const CLEAR_SOURCE: &str = "LSENext.ClearSource";
+
+    let can_junction = state
+        .map(|state| state.sources.iter().all(|source| source.is_dir))
+        .unwrap_or(false);
+    let has_state = state.is_some();
+
+    let directory_commands = if has_state && can_junction {
+        [PICK_SOURCE, DROP_SYMBOLIC, DROP_JUNCTION, CLEAR_SOURCE].join(";")
+    } else if has_state {
+        [PICK_SOURCE, DROP_SYMBOLIC, CLEAR_SOURCE].join(";")
+    } else {
+        PICK_SOURCE.to_string()
+    };
+
+    let background_commands = if has_state && can_junction {
+        [DROP_SYMBOLIC, DROP_JUNCTION, CLEAR_SOURCE].join(";")
+    } else if has_state {
+        [DROP_SYMBOLIC, CLEAR_SOURCE].join(";")
+    } else {
+        CLEAR_SOURCE.to_string()
+    };
+
+    (directory_commands, background_commands)
+}
+
+#[cfg(windows)]
+mod platform {
+    use super::StateError;
+    use std::ptr;
+    use windows_sys::Win32::Foundation::ERROR_SUCCESS;
+    use windows_sys::Win32::System::Registry::{
+        RegCloseKey, RegCreateKeyW, RegSetValueExW, HKEY, HKEY_CURRENT_USER, REG_SZ,
+    };
+
+    const DIRECTORY_MENU_KEY: &str = r"Software\Classes\Directory\shell\LSENext";
+    const BACKGROUND_MENU_KEY: &str = r"Software\Classes\Directory\Background\shell\LSENext";
+
+    pub fn sync_explorer_menu(
+        directory_commands: &str,
+        background_commands: &str,
+    ) -> Result<(), StateError> {
+        set_subcommands(DIRECTORY_MENU_KEY, directory_commands)?;
+        set_subcommands(BACKGROUND_MENU_KEY, background_commands)?;
+        Ok(())
+    }
+
+    fn set_subcommands(key_path: &str, value: &str) -> Result<(), StateError> {
+        let key_path = wide_null(key_path);
+        let mut key: HKEY = ptr::null_mut();
+        let create_result =
+            unsafe { RegCreateKeyW(HKEY_CURRENT_USER, key_path.as_ptr(), &mut key) };
+        if create_result != ERROR_SUCCESS {
+            return Err(StateError::Registry {
+                operation: "opening HKCU menu key",
+                code: create_result,
+            });
+        }
+
+        let value = wide_null(value);
+        let bytes = (value.len() * std::mem::size_of::<u16>()) as u32;
+        let set_result = unsafe {
+            RegSetValueExW(
+                key,
+                wide_null("SubCommands").as_ptr(),
+                0,
+                REG_SZ,
+                value.as_ptr() as *const u8,
+                bytes,
+            )
+        };
+        unsafe {
+            RegCloseKey(key);
+        }
+        if set_result != ERROR_SUCCESS {
+            return Err(StateError::Registry {
+                operation: "writing SubCommands",
+                code: set_result,
+            });
+        }
+        Ok(())
+    }
+
+    fn wide_null(value: &str) -> Vec<u16> {
+        value.encode_utf16().chain(Some(0)).collect()
+    }
+}
+
+#[cfg(not(windows))]
+mod platform {
+    use super::StateError;
+
+    pub fn sync_explorer_menu(
+        _directory_commands: &str,
+        _background_commands: &str,
+    ) -> Result<(), StateError> {
+        Ok(())
     }
 }
 
@@ -123,5 +235,42 @@ mod tests {
         let json = serde_json::to_string(&state).unwrap();
         let parsed: SelectionState = serde_json::from_str(&json).unwrap();
         assert_eq!(state, parsed);
+    }
+
+    #[test]
+    fn file_source_menu_subcommands_do_not_include_junction() {
+        let state = SelectionState {
+            picked_at_unix: 42,
+            sources: vec![PickedSource {
+                path: PathBuf::from(r"C:\src\file.txt"),
+                is_dir: false,
+            }],
+        };
+        let (directory, background) = menu_subcommands(Some(&state));
+        assert_eq!(
+            directory,
+            "LSENext.PickSource;LSENext.DropSymbolic;LSENext.ClearSource"
+        );
+        assert_eq!(background, "LSENext.DropSymbolic;LSENext.ClearSource");
+    }
+
+    #[test]
+    fn directory_source_menu_subcommands_include_junction() {
+        let state = SelectionState {
+            picked_at_unix: 42,
+            sources: vec![PickedSource {
+                path: PathBuf::from(r"C:\src\folder"),
+                is_dir: true,
+            }],
+        };
+        let (directory, background) = menu_subcommands(Some(&state));
+        assert_eq!(
+            directory,
+            "LSENext.PickSource;LSENext.DropSymbolic;LSENext.DropJunction;LSENext.ClearSource"
+        );
+        assert_eq!(
+            background,
+            "LSENext.DropSymbolic;LSENext.DropJunction;LSENext.ClearSource"
+        );
     }
 }
