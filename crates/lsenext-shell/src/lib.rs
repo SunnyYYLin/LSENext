@@ -3,15 +3,17 @@
 use lsenext_core::{clear_state, create_link, load_state, save_sources, LinkKind, SelectionState};
 use std::ffi::c_void;
 use std::path::{Path, PathBuf};
+use std::process::Command;
+use std::sync::OnceLock;
 use windows::core::{implement, Interface, GUID, HRESULT, PCSTR, PCWSTR, PWSTR};
 use windows::Win32::Foundation::{
     BOOL, CLASS_E_CLASSNOTAVAILABLE, CLASS_E_NOAGGREGATION, E_FAIL, E_NOTIMPL, E_OUTOFMEMORY,
-    E_POINTER, HINSTANCE, HWND, S_FALSE,
+    E_POINTER, HINSTANCE, HMODULE, HWND, S_FALSE,
 };
 use windows::Win32::System::Com::{
     CoTaskMemAlloc, CoTaskMemFree, IBindCtx, IClassFactory, IClassFactory_Impl,
 };
-use windows::Win32::System::LibraryLoader::DisableThreadLibraryCalls;
+use windows::Win32::System::LibraryLoader::{DisableThreadLibraryCalls, GetModuleFileNameW};
 use windows::Win32::UI::Shell::{
     IEnumExplorerCommand, IEnumExplorerCommand_Impl, IExplorerCommand, IExplorerCommand_Impl,
     IShellItemArray, ShellExecuteW, ECF_DEFAULT, ECS_DISABLED, ECS_ENABLED, ECS_HIDDEN,
@@ -31,6 +33,9 @@ pub const CLSID_LSENEXT_DIRECTORY_ROOT: GUID =
     GUID::from_u128(0x32ad61d5_1919_4582_95dc_d9eb0bb6e005);
 pub const CLSID_LSENEXT_BACKGROUND_ROOT: GUID =
     GUID::from_u128(0x32ad61d5_1919_4582_95dc_d9eb0bb6e006);
+pub const CLSID_LSENEXT_DIAGNOSTICS: GUID = GUID::from_u128(0x32ad61d5_1919_4582_95dc_d9eb0bb6e007);
+
+static MODULE_PATH: OnceLock<PathBuf> = OnceLock::new();
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum RootKind {
@@ -45,6 +50,7 @@ enum CommandKind {
     DropSymbolic,
     DropJunction,
     ClearSource,
+    Diagnostics,
 }
 
 #[implement(IExplorerCommand)]
@@ -116,6 +122,7 @@ impl IExplorerCommand_Impl for MenuCommand_Impl {
             CommandKind::DropSymbolic => "Drop Symbolic Link",
             CommandKind::DropJunction => "Drop Directory Junction",
             CommandKind::ClearSource => "Clear Link Source",
+            CommandKind::Diagnostics => "Debug Diagnostics",
         })
     }
 
@@ -133,6 +140,7 @@ impl IExplorerCommand_Impl for MenuCommand_Impl {
             CommandKind::DropSymbolic => CLSID_LSENEXT_DROP_SYMLINK,
             CommandKind::DropJunction => CLSID_LSENEXT_DROP_JUNCTION,
             CommandKind::ClearSource => CLSID_LSENEXT_CLEAR_SOURCE,
+            CommandKind::Diagnostics => CLSID_LSENEXT_DIAGNOSTICS,
         })
     }
 
@@ -143,6 +151,7 @@ impl IExplorerCommand_Impl for MenuCommand_Impl {
     ) -> windows::core::Result<u32> {
         let state = match self.kind {
             CommandKind::PickSource => ECS_ENABLED.0,
+            CommandKind::Diagnostics => ECS_ENABLED.0,
             CommandKind::DropSymbolic | CommandKind::ClearSource => {
                 if load_state().ok().flatten().is_some() {
                     ECS_ENABLED.0
@@ -182,6 +191,9 @@ impl IExplorerCommand_Impl for MenuCommand_Impl {
             CommandKind::DropSymbolic => drop_links(items, LinkKind::Symbolic),
             CommandKind::DropJunction => drop_links(items, LinkKind::Junction),
             CommandKind::ClearSource => clear_state().map(|_| ()).map_err(|err| err.to_string()),
+            CommandKind::Diagnostics => {
+                run_helper_command("diagnostics").map_err(|err| err.to_string())
+            }
         };
 
         result.map_err(|err| {
@@ -310,6 +322,9 @@ pub unsafe extern "system" fn DllMain(
 ) -> BOOL {
     if reason == 1 {
         let _ = DisableThreadLibraryCalls(module);
+        if let Some(path) = module_path(module) {
+            let _ = MODULE_PATH.set(path);
+        }
     }
     BOOL(1)
 }
@@ -341,6 +356,7 @@ pub extern "system" fn DllGetClassObject(
             CLSID_LSENEXT_DROP_SYMLINK => FactoryKind::Menu(CommandKind::DropSymbolic),
             CLSID_LSENEXT_DROP_JUNCTION => FactoryKind::Menu(CommandKind::DropJunction),
             CLSID_LSENEXT_CLEAR_SOURCE => FactoryKind::Menu(CommandKind::ClearSource),
+            CLSID_LSENEXT_DIAGNOSTICS => FactoryKind::Menu(CommandKind::Diagnostics),
             _ => return CLASS_E_CLASSNOTAVAILABLE,
         }
     };
@@ -383,6 +399,7 @@ fn menu_command_kinds(root_kind: RootKind, state: Option<SelectionState>) -> Vec
         RootKind::Background => Vec::new(),
     };
     if root_kind == RootKind::File {
+        commands.push(CommandKind::Diagnostics);
         return commands;
     }
     if let Some(state) = state {
@@ -392,7 +409,32 @@ fn menu_command_kinds(root_kind: RootKind, state: Option<SelectionState>) -> Vec
         }
         commands.push(CommandKind::ClearSource);
     }
+    commands.push(CommandKind::Diagnostics);
     commands
+}
+
+fn run_helper_command(command: &str) -> Result<(), std::io::Error> {
+    let helper = MODULE_PATH
+        .get()
+        .and_then(|path| {
+            path.parent()
+                .map(|parent| parent.join("lsenext-helper.exe"))
+        })
+        .unwrap_or_else(|| PathBuf::from("lsenext-helper.exe"));
+    Command::new(helper).arg(command).spawn()?;
+    Ok(())
+}
+
+fn module_path(module: HINSTANCE) -> Option<PathBuf> {
+    let mut buffer = [0u16; 32768];
+    let module = HMODULE(module.0);
+    let len = unsafe { GetModuleFileNameW(Some(&module), &mut buffer) };
+    if len == 0 {
+        return None;
+    }
+    Some(PathBuf::from(String::from_utf16_lossy(
+        &buffer[..len as usize],
+    )))
 }
 
 fn drop_links(items: Option<&IShellItemArray>, kind: LinkKind) -> Result<(), String> {
@@ -527,7 +569,8 @@ mod tests {
             vec![
                 CommandKind::PickSource,
                 CommandKind::DropSymbolic,
-                CommandKind::ClearSource
+                CommandKind::ClearSource,
+                CommandKind::Diagnostics,
             ]
         );
     }
@@ -548,6 +591,7 @@ mod tests {
                 CommandKind::DropSymbolic,
                 CommandKind::DropJunction,
                 CommandKind::ClearSource,
+                CommandKind::Diagnostics,
             ]
         );
     }
@@ -556,7 +600,7 @@ mod tests {
     fn no_state_only_shows_pick_source() {
         assert_eq!(
             menu_command_kinds(RootKind::Directory, None),
-            vec![CommandKind::PickSource]
+            vec![CommandKind::PickSource, CommandKind::Diagnostics]
         );
     }
 
@@ -571,7 +615,7 @@ mod tests {
         };
         assert_eq!(
             menu_command_kinds(RootKind::File, Some(state)),
-            vec![CommandKind::PickSource]
+            vec![CommandKind::PickSource, CommandKind::Diagnostics]
         );
     }
 
@@ -590,6 +634,7 @@ mod tests {
                 CommandKind::DropSymbolic,
                 CommandKind::DropJunction,
                 CommandKind::ClearSource,
+                CommandKind::Diagnostics,
             ]
         );
     }

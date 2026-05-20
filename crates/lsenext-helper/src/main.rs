@@ -3,6 +3,8 @@
 use anyhow::{bail, Context, Result};
 use lsenext_core::{clear_state, create_link, load_state, save_sources, LinkKind};
 use std::env;
+use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use windows_sys::Win32::UI::Shell::ShellExecuteW;
@@ -36,6 +38,9 @@ fn run() -> Result<()> {
         "about" => {
             show_about();
         }
+        "diagnostics" => {
+            show_diagnostics()?;
+        }
         "register-package" => {
             register_package_identity()?;
         }
@@ -43,7 +48,7 @@ fn run() -> Result<()> {
             unregister_package_identity()?;
         }
         _ => {
-            bail!("usage: lsenext-helper <pick-source|drop-symlink|drop-junction|clear|about|register-package|unregister-package> [paths]");
+            bail!("usage: lsenext-helper <pick-source|drop-symlink|drop-junction|clear|about|diagnostics|register-package|unregister-package> [paths]");
         }
     }
     Ok(())
@@ -110,6 +115,162 @@ fn run_elevated(kind: LinkKind, target: &Path) -> Result<()> {
 
 fn show_about() {
     show_info("LSENext 0.0.2\nQuick symbolic link and directory junction creation.");
+}
+
+fn show_diagnostics() -> Result<()> {
+    let text = build_diagnostics();
+    let path = diagnostics_path()?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let mut file = fs::File::create(&path)?;
+    file.write_all(text.as_bytes())?;
+
+    Command::new("notepad.exe")
+        .arg(&path)
+        .spawn()
+        .context("failed to open diagnostics in Notepad")?;
+    Ok(())
+}
+
+fn diagnostics_path() -> Result<PathBuf> {
+    let local_app_data = env::var_os("LOCALAPPDATA").context("LOCALAPPDATA is not set")?;
+    Ok(PathBuf::from(local_app_data)
+        .join("LSENext")
+        .join("diagnostics.txt"))
+}
+
+fn build_diagnostics() -> String {
+    let install_root = current_install_root().ok();
+    let state_path = env::var_os("LOCALAPPDATA")
+        .map(PathBuf::from)
+        .map(|path| path.join("LSENext").join("state.json"));
+    let mut output = String::new();
+
+    push_line(&mut output, "LSENext diagnostics");
+    push_line(&mut output, "===================");
+    push_line(
+        &mut output,
+        &format!("version: {}", env!("CARGO_PKG_VERSION")),
+    );
+    push_line(&mut output, &format!("process_arch: {}", env::consts::ARCH));
+    push_line(
+        &mut output,
+        &format!("current_exe: {:?}", env::current_exe()),
+    );
+    push_line(&mut output, &format!("install_root: {:?}", install_root));
+    push_line(&mut output, &format!("state_path: {:?}", state_path));
+    if let Some(path) = &state_path {
+        push_line(&mut output, &format!("state_exists: {}", path.exists()));
+    }
+
+    if let Some(root) = &install_root {
+        push_line(&mut output, "");
+        push_line(&mut output, "[files]");
+        for name in [
+            "lsenext-helper.exe",
+            "lsenext-shell.dll",
+            "AppxManifest.xml",
+            "LSENext.identity.msix",
+            "LSENext.cer",
+            "Assets\\StoreLogo.png",
+            "Assets\\Square150x150Logo.png",
+            "Assets\\Square44x44Logo.png",
+        ] {
+            let path = root.join(name);
+            let size = fs::metadata(&path).map(|metadata| metadata.len()).ok();
+            push_line(
+                &mut output,
+                &format!("{} exists={} size={:?}", name, path.exists(), size),
+            );
+        }
+        if let Ok(manifest) = fs::read_to_string(root.join("AppxManifest.xml")) {
+            push_line(&mut output, "");
+            push_line(&mut output, "[installed AppxManifest.xml]");
+            push_line(&mut output, &manifest);
+        }
+    }
+
+    push_ps(
+        &mut output,
+        "appx-package",
+        r#"
+$pkg = Get-AppxPackage -Name Sunnylin.LSENext
+if ($pkg) {
+  $pkg | Format-List Name, PackageFullName, InstallLocation, SignatureKind, Status, IsFramework, PackageUserInformation
+  ""
+  "Manifest extension XML:"
+  ([xml](Get-AppxPackageManifest -Package $pkg.PackageFullName)).Package.Applications.Application.Extensions.InnerXml
+} else {
+  "Sunnylin.LSENext package not found"
+}
+"#,
+    );
+    push_ps(
+        &mut output,
+        "classic-context-menu-registry",
+        r#"
+$keys = @(
+  "HKLM:\Software\Classes\*\shell\LSENext",
+  "HKLM:\Software\Classes\Directory\shell\LSENext",
+  "HKLM:\Software\Classes\Directory\Background\shell\LSENext",
+  "HKCU:\Software\Classes\*\shell\LSENext",
+  "HKCU:\Software\Classes\Directory\shell\LSENext",
+  "HKCU:\Software\Classes\Directory\Background\shell\LSENext",
+  "HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.PickSource",
+  "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.PickSource"
+)
+foreach ($key in $keys) {
+  "KEY $key exists=$(Test-Path $key)"
+  if (Test-Path $key) { Get-ItemProperty $key | Format-List * }
+}
+"#,
+    );
+    push_ps(
+        &mut output,
+        "packaged-com-registry",
+        r#"
+Get-ChildItem "HKCU:\Software\Classes\ActivatableClasses\Package" -ErrorAction SilentlyContinue |
+  Where-Object { $_.PSChildName -like "Sunnylin.LSENext*" } |
+  ForEach-Object {
+    "PACKAGE KEY $($_.Name)"
+    Get-ChildItem $_.PSPath -Recurse -ErrorAction SilentlyContinue |
+      Where-Object { $_.PSChildName -match "32ad61d5|LSENext|Explorer|Context" } |
+      Select-Object -First 80 Name
+  }
+"#,
+    );
+
+    output
+}
+
+fn push_line(output: &mut String, value: &str) {
+    output.push_str(value);
+    output.push_str("\r\n");
+}
+
+fn push_ps(output: &mut String, title: &str, script: &str) {
+    push_line(output, "");
+    push_line(output, &format!("[powershell:{}]", title));
+    match powershell_output(script) {
+        Ok(text) => push_line(output, &text),
+        Err(err) => push_line(output, &format!("ERROR: {err:#}")),
+    }
+}
+
+fn powershell_output(script: &str) -> Result<String> {
+    let output = Command::new("powershell.exe")
+        .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command"])
+        .arg(script)
+        .output()
+        .context("failed to start PowerShell")?;
+    let mut text = String::new();
+    text.push_str(&String::from_utf8_lossy(&output.stdout));
+    text.push_str(&String::from_utf8_lossy(&output.stderr));
+    if !output.status.success() {
+        bail!("PowerShell exited with {}\n{}", output.status, text);
+    }
+    Ok(text)
 }
 
 fn register_package_identity() -> Result<()> {
