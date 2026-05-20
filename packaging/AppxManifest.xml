@@ -6,12 +6,14 @@
   xmlns:desktop4="http://schemas.microsoft.com/appx/manifest/desktop/windows10/4"
   xmlns:com="http://schemas.microsoft.com/appx/manifest/com/windows10"
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
-  IgnorableNamespaces="uap uap3 desktop4 com rescap">
-  <Identity Name="Sunnylin.LSENext" Publisher="CN=LSENext" Version="0.0.1.0" ProcessorArchitecture="neutral" />
+  xmlns:uap10="http://schemas.microsoft.com/appx/manifest/uap/windows10/10"
+  IgnorableNamespaces="uap uap3 desktop4 com rescap uap10">
+  <Identity Name="Sunnylin.LSENext" Publisher="CN=LSENext" Version="0.0.2.0" ProcessorArchitecture="neutral" />
   <Properties>
     <DisplayName>LSENext</DisplayName>
     <PublisherDisplayName>LSENext contributors</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
+    <uap10:AllowExternalContent>true</uap10:AllowExternalContent>
   </Properties>
   <Dependencies>
     <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.22000.0" MaxVersionTested="10.0.26100.0" />

@@ -30,6 +30,38 @@ Copy-Item -Force -Path $helper -Destination $dist
 Copy-Item -Force -Path $shell -Destination (Join-Path $dist "lsenext-shell.dll")
 Copy-Item -Force -Recurse -Path (Join-Path $repo "resources") -Destination $dist
 Copy-Item -Force -Recurse -Path (Join-Path $repo "packaging") -Destination $dist
+Copy-Item -Force -Path (Join-Path $repo "packaging\AppxManifest.xml") -Destination $dist
+
+$assets = Join-Path $dist "Assets"
+New-Item -ItemType Directory -Force -Path $assets | Out-Null
+Add-Type -AssemblyName System.Drawing
+function New-LSENextLogo {
+    param(
+        [string]$Path,
+        [int]$Size
+    )
+    $bitmap = New-Object System.Drawing.Bitmap $Size, $Size
+    $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+    try {
+        $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+        $graphics.Clear([System.Drawing.Color]::FromArgb(0, 0, 0, 0))
+        $brush = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(0, 120, 212))
+        $graphics.FillRectangle($brush, 0, 0, $Size, $Size)
+        $brush.Dispose()
+        $pen = New-Object System.Drawing.Pen ([System.Drawing.Color]::White), ([Math]::Max(2, [int]($Size / 11)))
+        $margin = [int]($Size * 0.24)
+        $graphics.DrawLine($pen, $margin, [int]($Size * 0.42), [int]($Size * 0.58), [int]($Size * 0.42))
+        $graphics.DrawLine($pen, [int]($Size * 0.42), [int]($Size * 0.58), [int]($Size - $margin), [int]($Size * 0.58))
+        $pen.Dispose()
+        $bitmap.Save($Path, [System.Drawing.Imaging.ImageFormat]::Png)
+    } finally {
+        $graphics.Dispose()
+        $bitmap.Dispose()
+    }
+}
+New-LSENextLogo -Path (Join-Path $assets "StoreLogo.png") -Size 50
+New-LSENextLogo -Path (Join-Path $assets "Square150x150Logo.png") -Size 150
+New-LSENextLogo -Path (Join-Path $assets "Square44x44Logo.png") -Size 44
 
 $artifactVersion = $ReleaseTag.TrimStart("v")
 $zip = Join-Path $repo "artifacts\LSENext-$artifactVersion-$Architecture.zip"

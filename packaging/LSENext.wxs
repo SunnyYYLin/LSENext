@@ -5,7 +5,7 @@
   <Package
     Name="LSENext"
     Manufacturer="LSENext contributors"
-    Version="0.0.1.0"
+    Version="0.0.2.0"
     UpgradeCode="58BDBD4A-3D93-4FB9-8BBD-30EBBBE0B001"
     Scope="perMachine">
     <MajorUpgrade AllowSameVersionUpgrades="yes" DowngradeErrorMessage="A newer version of LSENext is already installed." />
@@ -17,7 +17,9 @@
     <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
 
     <StandardDirectory Id="ProgramFiles64Folder">
-      <Directory Id="INSTALLFOLDER" Name="LSENext" />
+      <Directory Id="INSTALLFOLDER" Name="LSENext">
+        <Directory Id="ASSETSFOLDER" Name="Assets" />
+      </Directory>
     </StandardDirectory>
     <StandardDirectory Id="ProgramMenuFolder" />
   </Package>
@@ -30,6 +32,11 @@
       <Component Id="ShellDll" Guid="58BDBD4A-3D93-4FB9-8BBD-30EBBBE0B102">
         <File Id="ShellDllFile" Source="$(var.SourceDir)\lsenext-shell.dll" KeyPath="yes" />
       </Component>
+      <Component Id="PackageAssets" Directory="ASSETSFOLDER" Guid="58BDBD4A-3D93-4FB9-8BBD-30EBBBE0B109">
+        <File Source="$(var.SourceDir)\Assets\StoreLogo.png" />
+        <File Source="$(var.SourceDir)\Assets\Square150x150Logo.png" />
+        <File Source="$(var.SourceDir)\Assets\Square44x44Logo.png" KeyPath="yes" />
+      </Component>
       <Component Id="ShellRegistration" Guid="58BDBD4A-3D93-4FB9-8BBD-30EBBBE0B107">
         <RemoveRegistryKey Root="HKLM" Key="Software\Classes\*\shell\LSENext" Action="removeOnInstall" />
         <RemoveRegistryKey Root="HKLM" Key="Software\Classes\Directory\shell\LSENext" Action="removeOnInstall" />
@@ -40,60 +47,14 @@
         <RemoveRegistryKey Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.BackgroundDropSymbolic" Action="removeOnInstall" />
         <RemoveRegistryKey Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.BackgroundDropJunction" Action="removeOnInstall" />
         <RemoveRegistryKey Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.ClearSource" Action="removeOnInstall" />
-
-        <RegistryValue Root="HKLM" Key="Software\Classes\CLSID\{32AD61D5-1919-4582-95DC-D9EB0BB6E000}" Name="(default)" Value="LSENext" Type="string" KeyPath="yes" />
-        <RegistryValue Root="HKLM" Key="Software\Classes\CLSID\{32AD61D5-1919-4582-95DC-D9EB0BB6E000}\InprocServer32" Name="(default)" Value="[INSTALLFOLDER]lsenext-shell.dll" Type="string" />
-        <RegistryValue Root="HKLM" Key="Software\Classes\CLSID\{32AD61D5-1919-4582-95DC-D9EB0BB6E000}\InprocServer32" Name="ThreadingModel" Value="Both" Type="string" />
-        <RegistryValue Root="HKLM" Key="Software\Classes\CLSID\{32AD61D5-1919-4582-95DC-D9EB0BB6E001}" Name="(default)" Value="LSENext Pick Link Source" Type="string" />
-        <RegistryValue Root="HKLM" Key="Software\Classes\CLSID\{32AD61D5-1919-4582-95DC-D9EB0BB6E001}\InprocServer32" Name="(default)" Value="[INSTALLFOLDER]lsenext-shell.dll" Type="string" />
-        <RegistryValue Root="HKLM" Key="Software\Classes\CLSID\{32AD61D5-1919-4582-95DC-D9EB0BB6E001}\InprocServer32" Name="ThreadingModel" Value="Both" Type="string" />
-        <RegistryValue Root="HKLM" Key="Software\Classes\CLSID\{32AD61D5-1919-4582-95DC-D9EB0BB6E002}" Name="(default)" Value="LSENext Drop Symbolic Link" Type="string" />
-        <RegistryValue Root="HKLM" Key="Software\Classes\CLSID\{32AD61D5-1919-4582-95DC-D9EB0BB6E002}\InprocServer32" Name="(default)" Value="[INSTALLFOLDER]lsenext-shell.dll" Type="string" />
-        <RegistryValue Root="HKLM" Key="Software\Classes\CLSID\{32AD61D5-1919-4582-95DC-D9EB0BB6E002}\InprocServer32" Name="ThreadingModel" Value="Both" Type="string" />
-        <RegistryValue Root="HKLM" Key="Software\Classes\CLSID\{32AD61D5-1919-4582-95DC-D9EB0BB6E003}" Name="(default)" Value="LSENext Drop Directory Junction" Type="string" />
-        <RegistryValue Root="HKLM" Key="Software\Classes\CLSID\{32AD61D5-1919-4582-95DC-D9EB0BB6E003}\InprocServer32" Name="(default)" Value="[INSTALLFOLDER]lsenext-shell.dll" Type="string" />
-        <RegistryValue Root="HKLM" Key="Software\Classes\CLSID\{32AD61D5-1919-4582-95DC-D9EB0BB6E003}\InprocServer32" Name="ThreadingModel" Value="Both" Type="string" />
-        <RegistryValue Root="HKLM" Key="Software\Classes\CLSID\{32AD61D5-1919-4582-95DC-D9EB0BB6E004}" Name="(default)" Value="LSENext Clear Link Source" Type="string" />
-        <RegistryValue Root="HKLM" Key="Software\Classes\CLSID\{32AD61D5-1919-4582-95DC-D9EB0BB6E004}\InprocServer32" Name="(default)" Value="[INSTALLFOLDER]lsenext-shell.dll" Type="string" />
-        <RegistryValue Root="HKLM" Key="Software\Classes\CLSID\{32AD61D5-1919-4582-95DC-D9EB0BB6E004}\InprocServer32" Name="ThreadingModel" Value="Both" Type="string" />
-        <RegistryValue Root="HKLM" Key="Software\Classes\CLSID\{32AD61D5-1919-4582-95DC-D9EB0BB6E005}" Name="(default)" Value="LSENext Directory Menu" Type="string" />
-        <RegistryValue Root="HKLM" Key="Software\Classes\CLSID\{32AD61D5-1919-4582-95DC-D9EB0BB6E005}\InprocServer32" Name="(default)" Value="[INSTALLFOLDER]lsenext-shell.dll" Type="string" />
-        <RegistryValue Root="HKLM" Key="Software\Classes\CLSID\{32AD61D5-1919-4582-95DC-D9EB0BB6E005}\InprocServer32" Name="ThreadingModel" Value="Both" Type="string" />
-        <RegistryValue Root="HKLM" Key="Software\Classes\CLSID\{32AD61D5-1919-4582-95DC-D9EB0BB6E006}" Name="(default)" Value="LSENext Directory Background Menu" Type="string" />
-        <RegistryValue Root="HKLM" Key="Software\Classes\CLSID\{32AD61D5-1919-4582-95DC-D9EB0BB6E006}\InprocServer32" Name="(default)" Value="[INSTALLFOLDER]lsenext-shell.dll" Type="string" />
-        <RegistryValue Root="HKLM" Key="Software\Classes\CLSID\{32AD61D5-1919-4582-95DC-D9EB0BB6E006}\InprocServer32" Name="ThreadingModel" Value="Both" Type="string" />
-
-        <RegistryValue Root="HKLM" Key="Software\Classes\*\shell\LSENext" Name="MUIVerb" Value="LSENext" Type="string" />
-        <RegistryValue Root="HKLM" Key="Software\Classes\*\shell\LSENext" Name="Icon" Value="shell32.dll,-16769" Type="string" />
-        <RegistryValue Root="HKLM" Key="Software\Classes\*\shell\LSENext" Name="SubCommands" Value="LSENext.PickSource" Type="string" />
-
-        <RegistryValue Root="HKLM" Key="Software\Classes\Directory\shell\LSENext" Name="MUIVerb" Value="LSENext" Type="string" />
-        <RegistryValue Root="HKLM" Key="Software\Classes\Directory\shell\LSENext" Name="Icon" Value="shell32.dll,-16769" Type="string" />
-        <RegistryValue Root="HKLM" Key="Software\Classes\Directory\shell\LSENext" Name="SubCommands" Value="LSENext.PickSource;LSENext.DropSymbolic;LSENext.DropJunction;LSENext.ClearSource" Type="string" />
-
-        <RegistryValue Root="HKLM" Key="Software\Classes\Directory\Background\shell\LSENext" Name="MUIVerb" Value="LSENext" Type="string" />
-        <RegistryValue Root="HKLM" Key="Software\Classes\Directory\Background\shell\LSENext" Name="Icon" Value="shell32.dll,-16769" Type="string" />
-        <RegistryValue Root="HKLM" Key="Software\Classes\Directory\Background\shell\LSENext" Name="SubCommands" Value="LSENext.BackgroundDropSymbolic;LSENext.BackgroundDropJunction;LSENext.ClearSource" Type="string" />
-
-        <RegistryValue Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.PickSource" Name="MUIVerb" Value="Pick Link Source" Type="string" />
-        <RegistryValue Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.PickSource\command" Value="&quot;[INSTALLFOLDER]lsenext-helper.exe&quot; pick-source &quot;%1&quot;" Type="string" />
-        <RegistryValue Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.DropSymbolic" Name="MUIVerb" Value="Drop Symbolic Link" Type="string" />
-        <RegistryValue Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.DropSymbolic\command" Value="&quot;[INSTALLFOLDER]lsenext-helper.exe&quot; drop-symlink &quot;%1&quot;" Type="string" />
-        <RegistryValue Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.DropJunction" Name="MUIVerb" Value="Drop Directory Junction" Type="string" />
-        <RegistryValue Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.DropJunction\command" Value="&quot;[INSTALLFOLDER]lsenext-helper.exe&quot; drop-junction &quot;%1&quot;" Type="string" />
-        <RegistryValue Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.BackgroundDropSymbolic" Name="MUIVerb" Value="Drop Symbolic Link" Type="string" />
-        <RegistryValue Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.BackgroundDropSymbolic\command" Value="&quot;[INSTALLFOLDER]lsenext-helper.exe&quot; drop-symlink &quot;%V&quot;" Type="string" />
-        <RegistryValue Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.BackgroundDropJunction" Name="MUIVerb" Value="Drop Directory Junction" Type="string" />
-        <RegistryValue Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.BackgroundDropJunction\command" Value="&quot;[INSTALLFOLDER]lsenext-helper.exe&quot; drop-junction &quot;%V&quot;" Type="string" />
-        <RegistryValue Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.ClearSource" Name="MUIVerb" Value="Clear Link Source" Type="string" />
-        <RegistryValue Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.ClearSource\command" Value="&quot;[INSTALLFOLDER]lsenext-helper.exe&quot; clear" Type="string" />
+        <RegistryValue Root="HKLM" Key="Software\LSENext" Name="NativeContextMenu" Value="1" Type="integer" KeyPath="yes" />
       </Component>
       <Component Id="StartMenuShortcut" Guid="58BDBD4A-3D93-4FB9-8BBD-30EBBBE0B108">
         <Shortcut Id="StartMenuShortcut" Directory="ProgramMenuFolder" Name="LSENext" Target="[INSTALLFOLDER]lsenext-helper.exe" Arguments="about" WorkingDirectory="INSTALLFOLDER" />
         <RegistryValue Root="HKCU" Key="Software\LSENext" Name="StartMenuShortcut" Value="1" Type="integer" KeyPath="yes" />
       </Component>
       <Component Id="ManifestFile" Guid="58BDBD4A-3D93-4FB9-8BBD-30EBBBE0B103">
-        <File Source="$(var.SourceDir)\packaging\AppxManifest.xml" KeyPath="yes" />
+        <File Source="$(var.SourceDir)\AppxManifest.xml" KeyPath="yes" />
       </Component>
       <Component Id="InstallScripts" Guid="58BDBD4A-3D93-4FB9-8BBD-30EBBBE0B104">
         <File Source="$(var.SourceDir)\packaging\install.ps1" KeyPath="yes" />
@@ -106,5 +67,14 @@
         <File Source="$(var.SourceDir)\resources\strings\zh-CN.json" KeyPath="yes" />
       </Component>
     </ComponentGroup>
+  </Fragment>
+
+  <Fragment>
+    <CustomAction Id="RegisterPackageIdentity" FileRef="HelperExeFile" ExeCommand="register-package" Execute="immediate" Return="check" />
+    <CustomAction Id="UnregisterPackageIdentity" FileRef="HelperExeFile" ExeCommand="unregister-package" Execute="immediate" Return="ignore" />
+    <InstallExecuteSequence>
+      <Custom Action="RegisterPackageIdentity" After="InstallFiles" Condition="NOT REMOVE" />
+      <Custom Action="UnregisterPackageIdentity" Before="RemoveFiles" Condition="REMOVE=&quot;ALL&quot;" />
+    </InstallExecuteSequence>
   </Fragment>
 </Wix>

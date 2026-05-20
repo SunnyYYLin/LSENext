@@ -4,6 +4,7 @@ use anyhow::{bail, Context, Result};
 use lsenext_core::{clear_state, create_link, load_state, save_sources, LinkKind};
 use std::env;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use windows_sys::Win32::UI::Shell::ShellExecuteW;
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     MessageBoxW, MB_ICONERROR, MB_OK, SW_SHOWNORMAL,
@@ -35,8 +36,14 @@ fn run() -> Result<()> {
         "about" => {
             show_about();
         }
+        "register-package" => {
+            register_package_identity()?;
+        }
+        "unregister-package" => {
+            unregister_package_identity()?;
+        }
         _ => {
-            bail!("usage: lsenext-helper <pick-source|drop-symlink|drop-junction|clear|about> [paths]");
+            bail!("usage: lsenext-helper <pick-source|drop-symlink|drop-junction|clear|about|register-package|unregister-package> [paths]");
         }
     }
     Ok(())
@@ -93,13 +100,61 @@ fn run_elevated(kind: LinkKind, target: &Path) -> Result<()> {
         )
     };
     if result as isize <= 32 {
-        bail!("failed to start elevated helper, ShellExecuteW returned {}", result as isize);
+        bail!(
+            "failed to start elevated helper, ShellExecuteW returned {}",
+            result as isize
+        );
     }
     Ok(())
 }
 
 fn show_about() {
-    show_info("LSENext 0.0.1\nQuick symbolic link and directory junction creation.");
+    show_info("LSENext 0.0.2\nQuick symbolic link and directory junction creation.");
+}
+
+fn register_package_identity() -> Result<()> {
+    let install_root = current_install_root()?;
+    let manifest = install_root.join("AppxManifest.xml");
+    if !manifest.is_file() {
+        bail!("missing package manifest: {}", manifest.display());
+    }
+
+    run_powershell_script(&format!(
+        "Add-AppxPackage -Register -Path {} -ExternalLocation {} -ForceApplicationShutdown -ForceUpdateFromAnyVersion",
+        ps_quote(&manifest.to_string_lossy()),
+        ps_quote(&install_root.to_string_lossy())
+    ))
+    .context("failed to register LSENext package identity")
+}
+
+fn unregister_package_identity() -> Result<()> {
+    run_powershell_script(
+        "$package = Get-AppxPackage -Name Sunnylin.LSENext; if ($package) { Remove-AppxPackage -Package $package.PackageFullName }",
+    )
+    .context("failed to unregister LSENext package identity")
+}
+
+fn current_install_root() -> Result<PathBuf> {
+    let exe = env::current_exe().context("failed to locate LSENext helper")?;
+    exe.parent()
+        .map(Path::to_path_buf)
+        .context("failed to locate LSENext install directory")
+}
+
+fn run_powershell_script(script: &str) -> Result<()> {
+    let status = Command::new("powershell.exe")
+        .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command"])
+        .arg(script)
+        .status()
+        .context("failed to start PowerShell")?;
+    if !status.success() {
+        bail!("PowerShell exited with {}", status);
+    }
+    Ok(())
+}
+
+fn ps_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "''"))
 }
 
 fn show_info(message: &str) {

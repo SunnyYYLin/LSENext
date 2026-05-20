@@ -18,8 +18,18 @@ jobs:
           targets: x86_64-pc-windows-msvc,aarch64-pc-windows-msvc
       - name: Compute alpha tag
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = "v0.0.1-alpha.${{ github.run_number }}"
+          $version = "0.0.2"
+          $existing = gh release list --limit 100 --json tagName --jq ".[] | select(.tagName | startswith(\"v$version-alpha.\")) | .tagName"
+          $next = 1
+          foreach ($tagName in $existing) {
+            if ($tagName -match "^v$version-alpha\.(\d+)$") {
+              $next = [Math]::Max($next, [int]$Matches[1] + 1)
+            }
+          }
+          $tag = "v$version-alpha.$next"
           "RELEASE_TAG=$tag" >> $env:GITHUB_ENV
       - name: Test
         run: cargo test --workspace

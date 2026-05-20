@@ -363,7 +363,7 @@ pub extern "system" fn DllUnregisterServer() -> HRESULT {
 
 #[no_mangle]
 pub extern "system" fn LSENextVersion() -> PCSTR {
-    PCSTR(c"LSENext 0.0.1".as_ptr() as _)
+    PCSTR(c"LSENext 0.0.2".as_ptr() as _)
 }
 
 fn enumerate_commands(root_kind: RootKind) -> windows::core::Result<IEnumExplorerCommand> {

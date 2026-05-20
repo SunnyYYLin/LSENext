@@ -15,6 +15,7 @@ if (-not (Test-Path $source)) {
 New-Item -ItemType Directory -Force -Path $target | Out-Null
 Copy-Item -Force -Path (Join-Path $source "*") -Destination $target
 
+& (Join-Path $target "lsenext-helper.exe") register-package
+
 Write-Host "LSENext files installed to $target"
-Write-Host "MSIX/sparse package registration is prepared in packaging\AppxManifest.xml."
-Write-Host "For v0.0.1 dev validation, register the package manifest with Add-AppxPackage -Register after signing/package preparation."
+Write-Host "LSENext sparse package identity registered for Windows 11 native context menus."
