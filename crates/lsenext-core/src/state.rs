@@ -111,8 +111,7 @@ pub fn validate_target_dir(path: &Path) -> Result<(), StateError> {
 }
 
 fn sync_explorer_menu(state: Option<&SelectionState>) -> Result<(), StateError> {
-    let (directory_commands, background_commands) = menu_subcommands(state);
-    platform::sync_explorer_menu(&directory_commands, &background_commands)
+    platform::sync_explorer_menu(state)
 }
 
 fn menu_subcommands(state: Option<&SelectionState>) -> (String, String) {
@@ -154,56 +153,28 @@ fn menu_subcommands(state: Option<&SelectionState>) -> (String, String) {
 
 #[cfg(windows)]
 mod platform {
-    use super::StateError;
-    use std::ptr;
+    use super::{SelectionState, StateError};
     use windows_sys::Win32::Foundation::ERROR_SUCCESS;
-    use windows_sys::Win32::System::Registry::{
-        RegCloseKey, RegCreateKeyW, RegSetValueExW, HKEY, HKEY_CURRENT_USER, REG_SZ,
-    };
+    use windows_sys::Win32::System::Registry::{RegDeleteTreeW, HKEY_CURRENT_USER};
 
+    const FILE_MENU_KEY: &str = r"Software\Classes\*\shell\LSENext";
     const DIRECTORY_MENU_KEY: &str = r"Software\Classes\Directory\shell\LSENext";
     const BACKGROUND_MENU_KEY: &str = r"Software\Classes\Directory\Background\shell\LSENext";
 
-    pub fn sync_explorer_menu(
-        directory_commands: &str,
-        background_commands: &str,
-    ) -> Result<(), StateError> {
-        set_subcommands(DIRECTORY_MENU_KEY, directory_commands)?;
-        set_subcommands(BACKGROUND_MENU_KEY, background_commands)?;
+    pub fn sync_explorer_menu(_state: Option<&SelectionState>) -> Result<(), StateError> {
+        delete_tree(FILE_MENU_KEY)?;
+        delete_tree(DIRECTORY_MENU_KEY)?;
+        delete_tree(BACKGROUND_MENU_KEY)?;
         Ok(())
     }
 
-    fn set_subcommands(key_path: &str, value: &str) -> Result<(), StateError> {
+    fn delete_tree(key_path: &str) -> Result<(), StateError> {
         let key_path = wide_null(key_path);
-        let mut key: HKEY = ptr::null_mut();
-        let create_result =
-            unsafe { RegCreateKeyW(HKEY_CURRENT_USER, key_path.as_ptr(), &mut key) };
-        if create_result != ERROR_SUCCESS {
+        let result = unsafe { RegDeleteTreeW(HKEY_CURRENT_USER, key_path.as_ptr()) };
+        if result != ERROR_SUCCESS && result != 2 {
             return Err(StateError::Registry {
-                operation: "opening HKCU menu key",
-                code: create_result,
-            });
-        }
-
-        let value = wide_null(value);
-        let bytes = (value.len() * std::mem::size_of::<u16>()) as u32;
-        let set_result = unsafe {
-            RegSetValueExW(
-                key,
-                wide_null("SubCommands").as_ptr(),
-                0,
-                REG_SZ,
-                value.as_ptr() as *const u8,
-                bytes,
-            )
-        };
-        unsafe {
-            RegCloseKey(key);
-        }
-        if set_result != ERROR_SUCCESS {
-            return Err(StateError::Registry {
-                operation: "writing SubCommands",
-                code: set_result,
+                operation: "deleting HKCU classic menu key",
+                code: result,
             });
         }
         Ok(())
@@ -216,12 +187,9 @@ mod platform {
 
 #[cfg(not(windows))]
 mod platform {
-    use super::StateError;
+    use super::{SelectionState, StateError};
 
-    pub fn sync_explorer_menu(
-        _directory_commands: &str,
-        _background_commands: &str,
-    ) -> Result<(), StateError> {
+    pub fn sync_explorer_menu(_state: Option<&SelectionState>) -> Result<(), StateError> {
         Ok(())
     }
 }

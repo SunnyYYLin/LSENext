@@ -41,6 +41,9 @@ fn run() -> Result<()> {
         "diagnostics" => {
             show_diagnostics()?;
         }
+        "repair-native-menu" => {
+            repair_native_menu()?;
+        }
         "register-package" => {
             register_package_identity()?;
         }
@@ -48,7 +51,7 @@ fn run() -> Result<()> {
             unregister_package_identity()?;
         }
         _ => {
-            bail!("usage: lsenext-helper <pick-source|drop-symlink|drop-junction|clear|about|diagnostics|register-package|unregister-package> [paths]");
+            bail!("usage: lsenext-helper <pick-source|drop-symlink|drop-junction|clear|about|diagnostics|repair-native-menu|register-package|unregister-package> [paths]");
         }
     }
     Ok(())
@@ -131,6 +134,13 @@ fn show_diagnostics() -> Result<()> {
         .spawn()
         .context("failed to open diagnostics in Notepad")?;
     Ok(())
+}
+
+fn repair_native_menu() -> Result<()> {
+    cleanup_classic_context_menu().context("failed to clean classic Explorer menu registration")?;
+    unregister_package_identity().ok();
+    register_package_identity()?;
+    show_diagnostics()
 }
 
 fn diagnostics_path() -> Result<PathBuf> {
@@ -274,6 +284,8 @@ fn powershell_output(script: &str) -> Result<String> {
 }
 
 fn register_package_identity() -> Result<()> {
+    cleanup_classic_context_menu().context("failed to clean classic Explorer menu registration")?;
+
     let install_root = current_install_root()?;
     let package = install_root.join("LSENext.identity.msix");
     if !package.is_file() {
@@ -301,6 +313,38 @@ fn unregister_package_identity() -> Result<()> {
         "$package = Get-AppxPackage -Name Sunnylin.LSENext; if ($package) { Remove-AppxPackage -Package $package.PackageFullName }",
     )
     .context("failed to unregister LSENext package identity")
+}
+
+fn cleanup_classic_context_menu() -> Result<()> {
+    run_powershell_script(
+        r#"
+$paths = @(
+  "HKCU:\Software\Classes\*\shell\LSENext",
+  "HKCU:\Software\Classes\Directory\shell\LSENext",
+  "HKCU:\Software\Classes\Directory\Background\shell\LSENext",
+  "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.PickSource",
+  "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.DropSymbolic",
+  "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.DropJunction",
+  "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.BackgroundDropSymbolic",
+  "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.BackgroundDropJunction",
+  "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.ClearSource",
+  "HKLM:\Software\Classes\*\shell\LSENext",
+  "HKLM:\Software\Classes\Directory\shell\LSENext",
+  "HKLM:\Software\Classes\Directory\Background\shell\LSENext",
+  "HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.PickSource",
+  "HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.DropSymbolic",
+  "HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.DropJunction",
+  "HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.BackgroundDropSymbolic",
+  "HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.BackgroundDropJunction",
+  "HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.ClearSource"
+)
+foreach ($path in $paths) {
+  if (Test-Path $path) {
+    Remove-Item -LiteralPath $path -Recurse -Force -ErrorAction SilentlyContinue
+  }
+}
+"#,
+    )
 }
 
 fn current_install_root() -> Result<PathBuf> {

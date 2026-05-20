@@ -51,6 +51,7 @@
       </Component>
       <Component Id="StartMenuShortcut" Guid="58BDBD4A-3D93-4FB9-8BBD-30EBBBE0B108">
         <Shortcut Id="StartMenuShortcut" Directory="ProgramMenuFolder" Name="LSENext" Target="[INSTALLFOLDER]lsenext-helper.exe" Arguments="about" WorkingDirectory="INSTALLFOLDER" />
+        <Shortcut Id="RepairNativeMenuShortcut" Directory="ProgramMenuFolder" Name="LSENext Repair Native Menu" Target="[INSTALLFOLDER]lsenext-helper.exe" Arguments="repair-native-menu" WorkingDirectory="INSTALLFOLDER" />
         <Shortcut Id="DiagnosticsShortcut" Directory="ProgramMenuFolder" Name="LSENext Diagnostics" Target="[INSTALLFOLDER]lsenext-helper.exe" Arguments="diagnostics" WorkingDirectory="INSTALLFOLDER" />
         <RegistryValue Root="HKCU" Key="Software\LSENext" Name="StartMenuShortcut" Value="1" Type="integer" KeyPath="yes" />
       </Component>
