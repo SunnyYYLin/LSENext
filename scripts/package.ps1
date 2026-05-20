@@ -35,6 +35,25 @@ Copy-Item -Force -Path (Join-Path $repo "packaging\AppxManifest.xml") -Destinati
 $assets = Join-Path $dist "Assets"
 New-Item -ItemType Directory -Force -Path $assets | Out-Null
 Add-Type -AssemblyName System.Drawing
+
+function Invoke-WindowsSdkTool {
+    param(
+        [string]$Name,
+        [string[]]$Arguments
+    )
+
+    $tool = Get-Command $Name -ErrorAction SilentlyContinue
+    if (-not $tool) {
+        $tool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter $Name -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+    }
+    if (-not $tool) {
+        throw "Unable to locate $Name in the Windows SDK"
+    }
+
+    & $tool.FullName @Arguments
+}
+
 function New-LSENextLogo {
     param(
         [string]$Path,
@@ -124,21 +143,3 @@ if ($LASTEXITCODE -ne 0) {
     throw "wix build failed for $Architecture"
 }
 Write-Host "Created $msi"
-
-function Invoke-WindowsSdkTool {
-    param(
-        [string]$Name,
-        [string[]]$Arguments
-    )
-
-    $tool = Get-Command $Name -ErrorAction SilentlyContinue
-    if (-not $tool) {
-        $tool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter $Name -ErrorAction SilentlyContinue |
-            Select-Object -First 1
-    }
-    if (-not $tool) {
-        throw "Unable to locate $Name in the Windows SDK"
-    }
-
-    & $tool.FullName @Arguments
-}
