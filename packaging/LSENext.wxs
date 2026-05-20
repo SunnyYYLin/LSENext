@@ -56,6 +56,10 @@
       <Component Id="ManifestFile" Guid="58BDBD4A-3D93-4FB9-8BBD-30EBBBE0B103">
         <File Source="$(var.SourceDir)\AppxManifest.xml" KeyPath="yes" />
       </Component>
+      <Component Id="IdentityPackage" Guid="58BDBD4A-3D93-4FB9-8BBD-30EBBBE0B10A">
+        <File Source="$(var.SourceDir)\LSENext.identity.msix" />
+        <File Source="$(var.SourceDir)\LSENext.cer" KeyPath="yes" />
+      </Component>
       <Component Id="InstallScripts" Guid="58BDBD4A-3D93-4FB9-8BBD-30EBBBE0B104">
         <File Source="$(var.SourceDir)\packaging\install.ps1" KeyPath="yes" />
         <File Source="$(var.SourceDir)\packaging\uninstall.ps1" />

@@ -14,6 +14,7 @@ if (-not (Test-Path $source)) {
 
 New-Item -ItemType Directory -Force -Path $target | Out-Null
 Copy-Item -Force -Path (Join-Path $source "*") -Destination $target
+Copy-Item -Force -Recurse -Path (Join-Path $source "Assets") -Destination $target
 
 & (Join-Path $target "lsenext-helper.exe") register-package
 

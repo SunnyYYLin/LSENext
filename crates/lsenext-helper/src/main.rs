@@ -114,14 +114,22 @@ fn show_about() {
 
 fn register_package_identity() -> Result<()> {
     let install_root = current_install_root()?;
-    let manifest = install_root.join("AppxManifest.xml");
-    if !manifest.is_file() {
-        bail!("missing package manifest: {}", manifest.display());
+    let package = install_root.join("LSENext.identity.msix");
+    if !package.is_file() {
+        bail!("missing package identity file: {}", package.display());
+    }
+    let certificate = install_root.join("LSENext.cer");
+    if certificate.is_file() {
+        run_powershell_script(&format!(
+            "Import-Certificate -FilePath {} -CertStoreLocation Cert:\\CurrentUser\\TrustedPeople | Out-Null",
+            ps_quote(&certificate.to_string_lossy())
+        ))
+        .context("failed to trust LSENext package certificate")?;
     }
 
     run_powershell_script(&format!(
-        "Add-AppxPackage -Register -Path {} -ExternalLocation {} -ForceApplicationShutdown -ForceUpdateFromAnyVersion",
-        ps_quote(&manifest.to_string_lossy()),
+        "Add-AppxPackage -Path {} -ExternalLocation {} -ForceApplicationShutdown -ForceUpdateFromAnyVersion",
+        ps_quote(&package.to_string_lossy()),
         ps_quote(&install_root.to_string_lossy())
     ))
     .context("failed to register LSENext package identity")

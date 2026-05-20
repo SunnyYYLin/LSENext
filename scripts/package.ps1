@@ -63,6 +63,43 @@ New-LSENextLogo -Path (Join-Path $assets "StoreLogo.png") -Size 50
 New-LSENextLogo -Path (Join-Path $assets "Square150x150Logo.png") -Size 150
 New-LSENextLogo -Path (Join-Path $assets "Square44x44Logo.png") -Size 44
 
+$identityRoot = Join-Path $dist "identity-package"
+if (Test-Path $identityRoot) {
+    Remove-Item -Recurse -Force $identityRoot
+}
+New-Item -ItemType Directory -Force -Path $identityRoot | Out-Null
+Copy-Item -Force -Path (Join-Path $repo "packaging\AppxManifest.xml") -Destination $identityRoot
+
+$identityPackage = Join-Path $dist "LSENext.identity.msix"
+if (Test-Path $identityPackage) {
+    Remove-Item -Force $identityPackage
+}
+MakeAppx.exe pack /o /nv /d $identityRoot /p $identityPackage
+if ($LASTEXITCODE -ne 0) {
+    throw "MakeAppx failed for LSENext identity package"
+}
+
+$cert = New-SelfSignedCertificate `
+    -Type Custom `
+    -Subject "CN=LSENext" `
+    -KeyUsage DigitalSignature `
+    -KeyAlgorithm RSA `
+    -KeyLength 2048 `
+    -CertStoreLocation "Cert:\CurrentUser\My" `
+    -KeyExportPolicy Exportable
+$certPath = Join-Path $dist "LSENext.cer"
+$pfxPath = Join-Path $env:TEMP "LSENext-$Architecture.pfx"
+$password = ConvertTo-SecureString "LSENextPackageSigning" -AsPlainText -Force
+Export-Certificate -Cert $cert -FilePath $certPath | Out-Null
+Export-PfxCertificate -Cert $cert -FilePath $pfxPath -Password $password | Out-Null
+SignTool.exe sign /fd SHA256 /f $pfxPath /p LSENextPackageSigning $identityPackage
+if ($LASTEXITCODE -ne 0) {
+    throw "SignTool failed for LSENext identity package"
+}
+Remove-Item -Force $pfxPath
+Remove-Item -Recurse -Force $identityRoot
+Remove-Item -Path "Cert:\CurrentUser\My\$($cert.Thumbprint)" -Force
+
 $artifactVersion = $ReleaseTag.TrimStart("v")
 $zip = Join-Path $repo "artifacts\LSENext-$artifactVersion-$Architecture.zip"
 New-Item -ItemType Directory -Force -Path (Split-Path $zip) | Out-Null
