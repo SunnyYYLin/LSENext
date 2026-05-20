@@ -44,8 +44,14 @@ function Invoke-WindowsSdkTool {
 
     $tool = Get-Command $Name -ErrorAction SilentlyContinue
     if (-not $tool) {
-        $tool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter $Name -ErrorAction SilentlyContinue |
-            Select-Object -First 1
+        $candidates = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter $Name -ErrorAction SilentlyContinue
+        $tool = $candidates | Where-Object { $_.FullName -match '\\x64\\' } | Select-Object -First 1
+        if (-not $tool) {
+            $tool = $candidates | Where-Object { $_.FullName -match '\\x86\\' } | Select-Object -First 1
+        }
+        if (-not $tool) {
+            $tool = $candidates | Select-Object -First 1
+        }
     }
     if (-not $tool) {
         throw "Unable to locate $Name in the Windows SDK"

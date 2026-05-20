@@ -1,8 +1,6 @@
 #![allow(non_snake_case)]
 
-use lsenext_core::{
-    clear_state, create_link, load_state, save_sources, LinkKind, PickedSource, SelectionState,
-};
+use lsenext_core::{clear_state, create_link, load_state, save_sources, LinkKind, SelectionState};
 use std::ffi::c_void;
 use std::path::{Path, PathBuf};
 use windows::core::{implement, Interface, GUID, HRESULT, PCSTR, PCWSTR, PWSTR};
@@ -513,6 +511,7 @@ fn show_error(message: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use lsenext_core::PickedSource;
 
     #[test]
     fn file_sources_do_not_offer_directory_junctions() {
