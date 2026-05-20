@@ -202,14 +202,20 @@ mod junction {
     fn native_target(source: &Path) -> io::Result<Vec<u16>> {
         let canonical = source.canonicalize()?;
         let text = canonical.to_string_lossy();
-        let native = if text.starts_with(r"\\?\") {
-            text.to_string()
-        } else if text.starts_with(r"\\") {
-            format!(r"\??\UNC\{}", text.trim_start_matches(r"\\"))
-        } else {
-            format!(r"\??\{}", text)
-        };
+        let native = native_target_text(&text);
         Ok(OsStr::new(&native).encode_wide().chain(Some(0)).collect())
+    }
+
+    fn native_target_text(path: &str) -> String {
+        if let Some(rest) = path.strip_prefix(r"\\?\UNC\") {
+            format!(r"\??\UNC\{}", rest)
+        } else if let Some(rest) = path.strip_prefix(r"\\?\") {
+            format!(r"\??\{}", rest)
+        } else if let Some(rest) = path.strip_prefix(r"\\") {
+            format!(r"\??\UNC\{}", rest)
+        } else {
+            format!(r"\??\{}", path)
+        }
     }
 
     #[cfg(test)]
@@ -218,15 +224,34 @@ mod junction {
 
         #[test]
         fn native_target_uses_nt_prefix() {
-            let path = Path::new(r"C:\Target");
-            let wide = native_target_for_test(path);
+            let wide = native_target_for_test(r"C:\Target");
             let text = String::from_utf16_lossy(&wide);
             assert!(text.starts_with(r"\??\"));
         }
 
-        fn native_target_for_test(path: &Path) -> Vec<u16> {
-            let text = path.to_string_lossy();
-            OsStr::new(&format!(r"\??\{}", text))
+        #[test]
+        fn native_target_converts_extended_drive_prefix() {
+            assert_eq!(native_target_text(r"\\?\D:\Target"), r"\??\D:\Target");
+        }
+
+        #[test]
+        fn native_target_converts_extended_unc_prefix() {
+            assert_eq!(
+                native_target_text(r"\\?\UNC\server\share\Target"),
+                r"\??\UNC\server\share\Target"
+            );
+        }
+
+        #[test]
+        fn native_target_converts_unc_prefix() {
+            assert_eq!(
+                native_target_text(r"\\server\share\Target"),
+                r"\??\UNC\server\share\Target"
+            );
+        }
+
+        fn native_target_for_test(path: &str) -> Vec<u16> {
+            OsStr::new(&native_target_text(path))
                 .encode_wide()
                 .chain(Some(0))
                 .collect()
@@ -272,5 +297,37 @@ mod tests {
             create_link(LinkKind::Symbolic, &dir, Path::new(r"C:\missing")),
             Err(LinkError::MissingTargetDirectory(_))
         ));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn junction_links_to_directory_target() {
+        let root = std::env::temp_dir().join(format!(
+            "lsenext-junction-test-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let source_dir = root.join("source");
+        let target_dir = root.join("target");
+        fs::create_dir_all(&source_dir).unwrap();
+        fs::create_dir_all(&target_dir).unwrap();
+
+        let source = PickedSource {
+            path: source_dir.clone(),
+            is_dir: true,
+        };
+        let destination = create_link(LinkKind::Junction, &source, &target_dir).unwrap();
+
+        assert!(destination.is_dir());
+        assert_eq!(
+            destination.canonicalize().unwrap(),
+            source_dir.canonicalize().unwrap()
+        );
+
+        let _ = fs::remove_dir(&destination);
+        let _ = fs::remove_dir_all(&root);
     }
 }
