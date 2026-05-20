@@ -16,7 +16,8 @@ use windows::Win32::System::Com::{
 use windows::Win32::System::LibraryLoader::DisableThreadLibraryCalls;
 use windows::Win32::UI::Shell::{
     IEnumExplorerCommand, IEnumExplorerCommand_Impl, IExplorerCommand, IExplorerCommand_Impl,
-    IShellItemArray, ShellExecuteW, ECF_DEFAULT, ECS_ENABLED, SIGDN_FILESYSPATH,
+    IShellItemArray, ShellExecuteW, ECF_DEFAULT, ECS_DISABLED, ECS_ENABLED, ECS_HIDDEN,
+    SIGDN_FILESYSPATH,
 };
 use windows::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_ICONERROR, MB_OK, SW_SHOWNORMAL};
 
@@ -142,7 +143,29 @@ impl IExplorerCommand_Impl for MenuCommand_Impl {
         _items: Option<&IShellItemArray>,
         _ok_to_be_slow: BOOL,
     ) -> windows::core::Result<u32> {
-        Ok(ECS_ENABLED.0 as u32)
+        let state = match self.kind {
+            CommandKind::PickSource => ECS_ENABLED.0,
+            CommandKind::DropSymbolic | CommandKind::ClearSource => {
+                if load_state().ok().flatten().is_some() {
+                    ECS_ENABLED.0
+                } else {
+                    ECS_DISABLED.0
+                }
+            }
+            CommandKind::DropJunction => {
+                if load_state()
+                    .ok()
+                    .flatten()
+                    .map(|state| state.sources.iter().all(|source| source.is_dir))
+                    .unwrap_or(false)
+                {
+                    ECS_ENABLED.0
+                } else {
+                    ECS_HIDDEN.0
+                }
+            }
+        };
+        Ok(state as u32)
     }
 
     fn Invoke(
