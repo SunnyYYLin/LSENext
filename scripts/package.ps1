@@ -74,7 +74,7 @@ $identityPackage = Join-Path $dist "LSENext.identity.msix"
 if (Test-Path $identityPackage) {
     Remove-Item -Force $identityPackage
 }
-MakeAppx.exe pack /o /nv /d $identityRoot /p $identityPackage
+Invoke-WindowsSdkTool "MakeAppx.exe" @("pack", "/o", "/nv", "/d", $identityRoot, "/p", $identityPackage)
 if ($LASTEXITCODE -ne 0) {
     throw "MakeAppx failed for LSENext identity package"
 }
@@ -92,7 +92,7 @@ $pfxPath = Join-Path $env:TEMP "LSENext-$Architecture.pfx"
 $password = ConvertTo-SecureString "LSENextPackageSigning" -AsPlainText -Force
 Export-Certificate -Cert $cert -FilePath $certPath | Out-Null
 Export-PfxCertificate -Cert $cert -FilePath $pfxPath -Password $password | Out-Null
-SignTool.exe sign /fd SHA256 /f $pfxPath /p LSENextPackageSigning $identityPackage
+Invoke-WindowsSdkTool "SignTool.exe" @("sign", "/fd", "SHA256", "/f", $pfxPath, "/p", "LSENextPackageSigning", $identityPackage)
 if ($LASTEXITCODE -ne 0) {
     throw "SignTool failed for LSENext identity package"
 }
@@ -124,3 +124,21 @@ if ($LASTEXITCODE -ne 0) {
     throw "wix build failed for $Architecture"
 }
 Write-Host "Created $msi"
+
+function Invoke-WindowsSdkTool {
+    param(
+        [string]$Name,
+        [string[]]$Arguments
+    )
+
+    $tool = Get-Command $Name -ErrorAction SilentlyContinue
+    if (-not $tool) {
+        $tool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter $Name -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+    }
+    if (-not $tool) {
+        throw "Unable to locate $Name in the Windows SDK"
+    }
+
+    & $tool.FullName @Arguments
+}
