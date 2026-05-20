@@ -20,7 +20,7 @@ use windows::Win32::UI::Shell::{
 };
 use windows::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_ICONERROR, MB_OK, SW_SHOWNORMAL};
 
-pub const CLSID_LSENEXT_ROOT: GUID = GUID::from_u128(0x32ad61d5_1919_4582_95dc_d9eb0bb6e000);
+pub const CLSID_LSENEXT_FILE_ROOT: GUID = GUID::from_u128(0x32ad61d5_1919_4582_95dc_d9eb0bb6e000);
 pub const CLSID_LSENEXT_PICK_SOURCE: GUID = GUID::from_u128(0x32ad61d5_1919_4582_95dc_d9eb0bb6e001);
 pub const CLSID_LSENEXT_DROP_SYMLINK: GUID =
     GUID::from_u128(0x32ad61d5_1919_4582_95dc_d9eb0bb6e002);
@@ -28,6 +28,17 @@ pub const CLSID_LSENEXT_DROP_JUNCTION: GUID =
     GUID::from_u128(0x32ad61d5_1919_4582_95dc_d9eb0bb6e003);
 pub const CLSID_LSENEXT_CLEAR_SOURCE: GUID =
     GUID::from_u128(0x32ad61d5_1919_4582_95dc_d9eb0bb6e004);
+pub const CLSID_LSENEXT_DIRECTORY_ROOT: GUID =
+    GUID::from_u128(0x32ad61d5_1919_4582_95dc_d9eb0bb6e005);
+pub const CLSID_LSENEXT_BACKGROUND_ROOT: GUID =
+    GUID::from_u128(0x32ad61d5_1919_4582_95dc_d9eb0bb6e006);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RootKind {
+    File,
+    Directory,
+    Background,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CommandKind {
@@ -38,7 +49,9 @@ enum CommandKind {
 }
 
 #[implement(IExplorerCommand)]
-struct RootCommand;
+struct RootCommand {
+    kind: RootKind,
+}
 
 #[implement(IExplorerCommand)]
 struct MenuCommand {
@@ -65,7 +78,11 @@ impl IExplorerCommand_Impl for RootCommand_Impl {
     }
 
     fn GetCanonicalName(&self) -> windows::core::Result<GUID> {
-        Ok(CLSID_LSENEXT_ROOT)
+        Ok(match self.kind {
+            RootKind::File => CLSID_LSENEXT_FILE_ROOT,
+            RootKind::Directory => CLSID_LSENEXT_DIRECTORY_ROOT,
+            RootKind::Background => CLSID_LSENEXT_BACKGROUND_ROOT,
+        })
     }
 
     fn GetState(
@@ -89,7 +106,7 @@ impl IExplorerCommand_Impl for RootCommand_Impl {
     }
 
     fn EnumSubCommands(&self) -> windows::core::Result<IEnumExplorerCommand> {
-        enumerate_commands()
+        enumerate_commands(self.kind)
     }
 }
 
@@ -228,7 +245,7 @@ struct ClassFactory {
 
 #[derive(Clone, Copy)]
 enum FactoryKind {
-    Root,
+    Root(RootKind),
     Menu(CommandKind),
 }
 
@@ -250,7 +267,7 @@ impl IClassFactory_Impl for ClassFactory_Impl {
         }
 
         let command: IExplorerCommand = match self.kind {
-            FactoryKind::Root => RootCommand.into(),
+            FactoryKind::Root(kind) => RootCommand { kind }.into(),
             FactoryKind::Menu(kind) => MenuCommand { kind }.into(),
         };
         unsafe {
@@ -296,7 +313,9 @@ pub extern "system" fn DllGetClassObject(
 
     let kind = unsafe {
         match *rclsid {
-            CLSID_LSENEXT_ROOT => FactoryKind::Root,
+            CLSID_LSENEXT_FILE_ROOT => FactoryKind::Root(RootKind::File),
+            CLSID_LSENEXT_DIRECTORY_ROOT => FactoryKind::Root(RootKind::Directory),
+            CLSID_LSENEXT_BACKGROUND_ROOT => FactoryKind::Root(RootKind::Background),
             CLSID_LSENEXT_PICK_SOURCE => FactoryKind::Menu(CommandKind::PickSource),
             CLSID_LSENEXT_DROP_SYMLINK => FactoryKind::Menu(CommandKind::DropSymbolic),
             CLSID_LSENEXT_DROP_JUNCTION => FactoryKind::Menu(CommandKind::DropJunction),
@@ -324,8 +343,8 @@ pub extern "system" fn LSENextVersion() -> PCSTR {
     PCSTR(c"LSENext 0.0.1".as_ptr() as _)
 }
 
-fn enumerate_commands() -> windows::core::Result<IEnumExplorerCommand> {
-    let commands = menu_command_kinds(load_state().ok().flatten())
+fn enumerate_commands(root_kind: RootKind) -> windows::core::Result<IEnumExplorerCommand> {
+    let commands = menu_command_kinds(root_kind, load_state().ok().flatten())
         .into_iter()
         .map(|kind| MenuCommand { kind }.into())
         .collect();
@@ -337,8 +356,14 @@ fn enumerate_commands() -> windows::core::Result<IEnumExplorerCommand> {
     .into())
 }
 
-fn menu_command_kinds(state: Option<SelectionState>) -> Vec<CommandKind> {
-    let mut commands = vec![CommandKind::PickSource];
+fn menu_command_kinds(root_kind: RootKind, state: Option<SelectionState>) -> Vec<CommandKind> {
+    let mut commands = match root_kind {
+        RootKind::File | RootKind::Directory => vec![CommandKind::PickSource],
+        RootKind::Background => Vec::new(),
+    };
+    if root_kind == RootKind::File {
+        return commands;
+    }
     if let Some(state) = state {
         commands.push(CommandKind::DropSymbolic);
         if state.sources.iter().all(|source| source.is_dir) {
@@ -476,7 +501,7 @@ mod tests {
             }],
         };
         assert_eq!(
-            menu_command_kinds(Some(state)),
+            menu_command_kinds(RootKind::Directory, Some(state)),
             vec![
                 CommandKind::PickSource,
                 CommandKind::DropSymbolic,
@@ -495,7 +520,7 @@ mod tests {
             }],
         };
         assert_eq!(
-            menu_command_kinds(Some(state)),
+            menu_command_kinds(RootKind::Directory, Some(state)),
             vec![
                 CommandKind::PickSource,
                 CommandKind::DropSymbolic,
@@ -507,6 +532,43 @@ mod tests {
 
     #[test]
     fn no_state_only_shows_pick_source() {
-        assert_eq!(menu_command_kinds(None), vec![CommandKind::PickSource]);
+        assert_eq!(
+            menu_command_kinds(RootKind::Directory, None),
+            vec![CommandKind::PickSource]
+        );
+    }
+
+    #[test]
+    fn file_root_only_shows_pick_source() {
+        let state = SelectionState {
+            picked_at_unix: 42,
+            sources: vec![PickedSource {
+                path: PathBuf::from(r"C:\src\folder"),
+                is_dir: true,
+            }],
+        };
+        assert_eq!(
+            menu_command_kinds(RootKind::File, Some(state)),
+            vec![CommandKind::PickSource]
+        );
+    }
+
+    #[test]
+    fn background_root_only_shows_drop_commands() {
+        let state = SelectionState {
+            picked_at_unix: 42,
+            sources: vec![PickedSource {
+                path: PathBuf::from(r"C:\src\folder"),
+                is_dir: true,
+            }],
+        };
+        assert_eq!(
+            menu_command_kinds(RootKind::Background, Some(state)),
+            vec![
+                CommandKind::DropSymbolic,
+                CommandKind::DropJunction,
+                CommandKind::ClearSource,
+            ]
+        );
     }
 }

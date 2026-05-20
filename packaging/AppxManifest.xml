@@ -30,10 +30,10 @@
               <desktop4:Verb Id="pickSource" Clsid="32ad61d5-1919-4582-95dc-d9eb0bb6e000" />
             </desktop4:ItemType>
             <desktop4:ItemType Type="Directory">
-              <desktop4:Verb Id="pickDirectorySource" Clsid="32ad61d5-1919-4582-95dc-d9eb0bb6e000" />
+              <desktop4:Verb Id="directoryMenu" Clsid="32ad61d5-1919-4582-95dc-d9eb0bb6e005" />
             </desktop4:ItemType>
             <desktop4:ItemType Type="Directory\Background">
-              <desktop4:Verb Id="dropSymbolicLinkBackground" Clsid="32ad61d5-1919-4582-95dc-d9eb0bb6e000" />
+              <desktop4:Verb Id="backgroundMenu" Clsid="32ad61d5-1919-4582-95dc-d9eb0bb6e006" />
             </desktop4:ItemType>
           </desktop4:FileExplorerContextMenus>
         </desktop4:Extension>
@@ -41,6 +41,8 @@
           <com:ComServer>
             <com:SurrogateServer DisplayName="LSENext Shell Extension">
               <com:Class Id="32ad61d5-1919-4582-95dc-d9eb0bb6e000" Path="lsenext-shell.dll" ThreadingModel="Both" />
+              <com:Class Id="32ad61d5-1919-4582-95dc-d9eb0bb6e005" Path="lsenext-shell.dll" ThreadingModel="Both" />
+              <com:Class Id="32ad61d5-1919-4582-95dc-d9eb0bb6e006" Path="lsenext-shell.dll" ThreadingModel="Both" />
             </com:SurrogateServer>
           </com:ComServer>
         </com:Extension>
