@@ -129,40 +129,59 @@ fn show_diagnostics() -> Result<()> {
 
 fn launch_repair_native_menu() -> Result<()> {
     let install_root = current_install_root()?;
-    let script = format!(
-        r#"
+    let script_path = diagnostics_path()?
+        .parent()
+        .context("failed to locate diagnostics directory")?
+        .join("repair-native-menu.ps1");
+    if let Some(parent) = script_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    let script = r#"
 $Host.UI.RawUI.WindowTitle = "LSENext Repair Native Menu"
 "LSENext Repair Native Menu"
 "This window shows repair progress and writes diagnostics."
 ""
 
-$installRoot = {}
+$installRoot = __INSTALL_ROOT__
 $diag = Join-Path $env:LOCALAPPDATA "LSENext\diagnostics.txt"
-$helper = Join-Path $installRoot "lsenext-helper.exe"
 $package = Join-Path $installRoot "LSENext.identity.msix"
 $certificate = Join-Path $installRoot "LSENext.cer"
 New-Item -ItemType Directory -Force -Path (Split-Path $diag) | Out-Null
 "LSENext repair log" | Set-Content -Path $diag
 "==================" | Add-Content -Path $diag
+"script: $PSCommandPath" | Add-Content -Path $diag
+"installRoot: $installRoot" | Add-Content -Path $diag
 
-function Step($Percent, $Name, [scriptblock]$Action) {{
+function Step($Percent, $Name, [scriptblock]$Action) {
   Write-Progress -Activity "LSENext Repair Native Menu" -Status $Name -PercentComplete $Percent
-  Write-Host ("[{{0,3}}%] {{1}}" -f $Percent, $Name)
+  Write-Host ("[{0,3}%] {1}" -f $Percent, $Name)
   "" | Add-Content -Path $diag
   "STEP $Name: started" | Add-Content -Path $diag
-  try {{
+  try {
     $output = & $Action 2>&1 | Out-String
-    if ($output.Trim().Length -gt 0) {{ $output.Trim() | Add-Content -Path $diag }}
+    if ($output.Trim().Length -gt 0) { $output.Trim() | Add-Content -Path $diag }
     "STEP $Name: ok" | Add-Content -Path $diag
-    Write-Host ("[{{0,3}}%] {{1}}: ok" -f $Percent, $Name)
-  }} catch {{
+    Write-Host ("[{0,3}%] {1}: ok" -f $Percent, $Name)
+  } catch {
     "STEP $Name: ERROR: $($_.Exception.Message)" | Add-Content -Path $diag
-    Write-Host ("[{{0,3}}%] {{1}}: ERROR" -f $Percent, $Name)
+    Write-Host ("[{0,3}%] {1}: ERROR" -f $Percent, $Name)
     Write-Host $_.Exception.Message
-  }}
-}}
+  }
+}
 
-Step 10 "cleanup classic context menu" {{
+Step 5 "check installed files" {
+  foreach ($path in @($package, $certificate, (Join-Path $installRoot "lsenext-shell.dll"), (Join-Path $installRoot "AppxManifest.xml"))) {
+    if (Test-Path $path) {
+      $item = Get-Item -LiteralPath $path
+      "$path exists size=$($item.Length)"
+    } else {
+      "$path missing"
+    }
+  }
+}
+
+Step 10 "cleanup classic context menu" {
   $paths = @(
     "HKCU:\Software\Classes\*\shell\LSENext",
     "HKCU:\Software\Classes\Directory\shell\LSENext",
@@ -183,45 +202,79 @@ Step 10 "cleanup classic context menu" {{
     "HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.BackgroundDropJunction",
     "HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.ClearSource"
   )
-  foreach ($path in $paths) {{
-    if (Test-Path $path) {{ Remove-Item -LiteralPath $path -Recurse -Force -ErrorAction SilentlyContinue }}
-  }}
-}}
+  foreach ($path in $paths) {
+    if (Test-Path $path) { Remove-Item -LiteralPath $path -Recurse -Force -ErrorAction SilentlyContinue }
+  }
+}
 
-Step 35 "unregister existing package identity" {{
-  $pkg = Get-AppxPackage -Name Sunnylin.LSENext
-  if ($pkg) {{ Remove-AppxPackage -Package $pkg.PackageFullName }}
-}}
+Step 35 "unregister existing package identity" {
+  $pkg = Get-AppxPackage -Name Sunnylin.LSENext -ErrorAction SilentlyContinue
+  if ($pkg) {
+    Remove-AppxPackage -Package $pkg.PackageFullName -ErrorAction Stop
+  } else {
+    "Sunnylin.LSENext was not registered"
+  }
+}
 
-Step 60 "trust package certificate" {{
-  if (Test-Path $certificate) {{
-    Import-Certificate -FilePath $certificate -CertStoreLocation Cert:\CurrentUser\TrustedPeople | Out-Null
-  }} else {{
+Step 60 "trust package certificate" {
+  if (Test-Path $certificate) {
+    Import-Certificate -FilePath $certificate -CertStoreLocation Cert:\CurrentUser\TrustedPeople -ErrorAction Stop | Out-Null
+  } else {
     "certificate missing: $certificate"
-  }}
-}}
+  }
+}
 
-Step 85 "register package identity" {{
-  if (-not (Test-Path $package)) {{ throw "package missing: $package" }}
-  Add-AppxPackage -Path $package -ExternalLocation $installRoot -ForceApplicationShutdown -ForceUpdateFromAnyVersion
-}}
+Step 85 "register package identity" {
+  if (-not (Test-Path $package)) { throw "package missing: $package" }
+  Add-AppxPackage -Path $package -ExternalLocation $installRoot -ForceApplicationShutdown -ForceUpdateFromAnyVersion -ErrorAction Stop
+}
+
+Step 95 "collect registration diagnostics" {
+  "[appx-package]"
+  $pkg = Get-AppxPackage -Name Sunnylin.LSENext -ErrorAction SilentlyContinue
+  if ($pkg) {
+    $pkg | Format-List Name, PackageFullName, InstallLocation, SignatureKind, Status | Out-String
+  } else {
+    "Sunnylin.LSENext package not found"
+  }
+  ""
+  "[classic-context-menu-registry]"
+  foreach ($path in @(
+    "HKCU:\Software\Classes\*\shell\LSENext",
+    "HKCU:\Software\Classes\Directory\shell\LSENext",
+    "HKCU:\Software\Classes\Directory\Background\shell\LSENext",
+    "HKLM:\Software\Classes\*\shell\LSENext",
+    "HKLM:\Software\Classes\Directory\shell\LSENext",
+    "HKLM:\Software\Classes\Directory\Background\shell\LSENext"
+  )) {
+    "KEY $path exists=$(Test-Path $path)"
+  }
+}
 
 Write-Progress -Activity "LSENext Repair Native Menu" -Status "Opening diagnostics" -PercentComplete 100
-Write-Host "[100%] opening diagnostics"
+Write-Host "[100%] opening diagnostics in Notepad"
 "" | Add-Content -Path $diag
-"--- helper diagnostics follows ---" | Add-Content -Path $diag
-Start-Process -FilePath $helper -ArgumentList "diagnostics" -Wait
+Start-Process notepad.exe -ArgumentList $diag
 Write-Progress -Activity "LSENext Repair Native Menu" -Completed
 Write-Host ""
-Write-Host "Done. Diagnostics should be open in Notepad."
-Start-Sleep -Seconds 5
-"#,
-        ps_quote(&install_root.to_string_lossy())
+Write-Host "Done. This window will stay open. If Notepad did not open, copy the lines above and the file path below:"
+Write-Host $diag
+"#
+    .replace(
+        "__INSTALL_ROOT__",
+        &ps_quote(&install_root.to_string_lossy()),
     );
+    fs::write(&script_path, script)?;
 
     Command::new("powershell.exe")
-        .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command"])
-        .arg(script)
+        .args([
+            "-NoExit",
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+        ])
+        .arg(&script_path)
         .spawn()
         .context("failed to start visible repair window")?;
     Ok(())
