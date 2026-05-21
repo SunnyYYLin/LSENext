@@ -6,7 +6,9 @@ use std::env;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::thread;
+use std::time::{Duration, Instant};
 use windows_sys::Win32::UI::Shell::ShellExecuteW;
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     MessageBoxW, MB_ICONERROR, MB_OK, SW_SHOWNORMAL,
@@ -137,10 +139,53 @@ fn show_diagnostics() -> Result<()> {
 }
 
 fn repair_native_menu() -> Result<()> {
-    cleanup_classic_context_menu().context("failed to clean classic Explorer menu registration")?;
-    unregister_package_identity().ok();
-    register_package_identity()?;
-    show_diagnostics()
+    let mut repair = String::new();
+    push_line(&mut repair, "LSENext repair log");
+    push_line(&mut repair, "==================");
+
+    run_repair_step(
+        &mut repair,
+        "cleanup classic context menu",
+        cleanup_classic_context_menu_script(),
+    );
+    run_repair_step(
+        &mut repair,
+        "unregister existing package identity",
+        unregister_package_identity_script(),
+    );
+    if let Ok(install_root) = current_install_root() {
+        let certificate = install_root.join("LSENext.cer");
+        if certificate.is_file() {
+            run_repair_step(
+                &mut repair,
+                "trust package certificate",
+                &format!(
+                    "Import-Certificate -FilePath {} -CertStoreLocation Cert:\\CurrentUser\\TrustedPeople | Out-Null",
+                    ps_quote(&certificate.to_string_lossy())
+                ),
+            );
+        } else {
+            push_line(
+                &mut repair,
+                "STEP trust package certificate: skipped, certificate missing",
+            );
+        }
+
+        let package = install_root.join("LSENext.identity.msix");
+        run_repair_step(
+            &mut repair,
+            "register package identity",
+            &format!(
+                "Add-AppxPackage -Path {} -ExternalLocation {} -ForceApplicationShutdown -ForceUpdateFromAnyVersion",
+                ps_quote(&package.to_string_lossy()),
+                ps_quote(&install_root.to_string_lossy())
+            ),
+        );
+    } else {
+        push_line(&mut repair, "STEP locate install root: failed");
+    }
+
+    write_and_open_diagnostics(Some(&repair))
 }
 
 fn diagnostics_path() -> Result<PathBuf> {
@@ -254,6 +299,28 @@ Get-ChildItem "HKCU:\Software\Classes\ActivatableClasses\Package" -ErrorAction S
     output
 }
 
+fn write_and_open_diagnostics(prefix: Option<&str>) -> Result<()> {
+    let mut text = String::new();
+    if let Some(prefix) = prefix {
+        text.push_str(prefix);
+        text.push_str("\r\n\r\n");
+    }
+    text.push_str(&build_diagnostics());
+
+    let path = diagnostics_path()?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let mut file = fs::File::create(&path)?;
+    file.write_all(text.as_bytes())?;
+
+    Command::new("notepad.exe")
+        .arg(&path)
+        .spawn()
+        .context("failed to open diagnostics in Notepad")?;
+    Ok(())
+}
+
 fn push_line(output: &mut String, value: &str) {
     output.push_str(value);
     output.push_str("\r\n");
@@ -269,9 +336,9 @@ fn push_ps(output: &mut String, title: &str, script: &str) {
 }
 
 fn powershell_output(script: &str) -> Result<String> {
-    let output = Command::new("powershell.exe")
-        .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command"])
-        .arg(script)
+    let output = powershell_command(script)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
         .output()
         .context("failed to start PowerShell")?;
     let mut text = String::new();
@@ -309,15 +376,20 @@ fn register_package_identity() -> Result<()> {
 }
 
 fn unregister_package_identity() -> Result<()> {
-    run_powershell_script(
-        "$package = Get-AppxPackage -Name Sunnylin.LSENext; if ($package) { Remove-AppxPackage -Package $package.PackageFullName }",
-    )
-    .context("failed to unregister LSENext package identity")
+    run_powershell_script(unregister_package_identity_script())
+        .context("failed to unregister LSENext package identity")
 }
 
 fn cleanup_classic_context_menu() -> Result<()> {
-    run_powershell_script(
-        r#"
+    run_powershell_script(cleanup_classic_context_menu_script())
+}
+
+fn unregister_package_identity_script() -> &'static str {
+    "$package = Get-AppxPackage -Name Sunnylin.LSENext; if ($package) { Remove-AppxPackage -Package $package.PackageFullName }"
+}
+
+fn cleanup_classic_context_menu_script() -> &'static str {
+    r#"
 $paths = @(
   "HKCU:\Software\Classes\*\shell\LSENext",
   "HKCU:\Software\Classes\Directory\shell\LSENext",
@@ -343,8 +415,7 @@ foreach ($path in $paths) {
     Remove-Item -LiteralPath $path -Recurse -Force -ErrorAction SilentlyContinue
   }
 }
-"#,
-    )
+"#
 }
 
 fn current_install_root() -> Result<PathBuf> {
@@ -355,9 +426,7 @@ fn current_install_root() -> Result<PathBuf> {
 }
 
 fn run_powershell_script(script: &str) -> Result<()> {
-    let status = Command::new("powershell.exe")
-        .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command"])
-        .arg(script)
+    let status = powershell_command(script)
         .status()
         .context("failed to start PowerShell")?;
     if !status.success() {
@@ -365,6 +434,82 @@ fn run_powershell_script(script: &str) -> Result<()> {
     }
     Ok(())
 }
+
+fn run_repair_step(repair: &mut String, name: &str, script: &str) {
+    push_line(repair, "");
+    push_line(repair, &format!("STEP {name}: started"));
+    match powershell_output_with_timeout(script, Duration::from_secs(45)) {
+        Ok(text) => {
+            push_line(repair, &format!("STEP {name}: ok"));
+            if !text.trim().is_empty() {
+                push_line(repair, text.trim());
+            }
+        }
+        Err(err) => {
+            push_line(repair, &format!("STEP {name}: ERROR: {err:#}"));
+        }
+    }
+}
+
+fn powershell_output_with_timeout(script: &str, timeout: Duration) -> Result<String> {
+    let mut child = powershell_command(script)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .context("failed to start PowerShell")?;
+    let started = Instant::now();
+    loop {
+        if child.try_wait()?.is_some() {
+            let output = child.wait_with_output()?;
+            return powershell_text_result(output);
+        }
+        if started.elapsed() >= timeout {
+            child.kill().ok();
+            let output = child.wait_with_output()?;
+            let text = output_to_text(&output);
+            bail!(
+                "PowerShell timed out after {} seconds\n{}",
+                timeout.as_secs(),
+                text
+            );
+        }
+        thread::sleep(Duration::from_millis(100));
+    }
+}
+
+fn powershell_text_result(output: std::process::Output) -> Result<String> {
+    let text = output_to_text(&output);
+    if !output.status.success() {
+        bail!("PowerShell exited with {}\n{}", output.status, text);
+    }
+    Ok(text)
+}
+
+fn output_to_text(output: &std::process::Output) -> String {
+    let mut text = String::new();
+    text.push_str(&String::from_utf8_lossy(&output.stdout));
+    text.push_str(&String::from_utf8_lossy(&output.stderr));
+    text
+}
+
+fn powershell_command(script: &str) -> Command {
+    let mut command = Command::new("powershell.exe");
+    command
+        .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command"])
+        .arg(script);
+    hide_console_window(&mut command);
+    command
+}
+
+#[cfg(windows)]
+fn hide_console_window(command: &mut Command) {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+    command.creation_flags(CREATE_NO_WINDOW);
+}
+
+#[cfg(not(windows))]
+fn hide_console_window(_command: &mut Command) {}
 
 fn ps_quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "''"))
