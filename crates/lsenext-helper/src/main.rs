@@ -44,8 +44,9 @@ fn run() -> Result<()> {
             show_diagnostics()?;
         }
         "repair-native-menu" => {
-            repair_native_menu()?;
+            launch_repair_native_menu()?;
         }
+        "repair-native-menu-run" => repair_native_menu()?,
         "register-package" => {
             register_package_identity()?;
         }
@@ -53,7 +54,7 @@ fn run() -> Result<()> {
             unregister_package_identity()?;
         }
         _ => {
-            bail!("usage: lsenext-helper <pick-source|drop-symlink|drop-junction|clear|about|diagnostics|repair-native-menu|register-package|unregister-package> [paths]");
+            bail!("usage: lsenext-helper <pick-source|drop-symlink|drop-junction|clear|about|diagnostics|repair-native-menu|repair-native-menu-run|register-package|unregister-package> [paths]");
         }
     }
     Ok(())
@@ -123,18 +124,35 @@ fn show_about() {
 }
 
 fn show_diagnostics() -> Result<()> {
-    let text = build_diagnostics();
-    let path = diagnostics_path()?;
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    let mut file = fs::File::create(&path)?;
-    file.write_all(text.as_bytes())?;
+    write_and_open_diagnostics(None)
+}
 
-    Command::new("notepad.exe")
-        .arg(&path)
+fn launch_repair_native_menu() -> Result<()> {
+    let exe = env::current_exe().context("failed to locate LSENext helper")?;
+    let script = format!(
+        r#"
+$Host.UI.RawUI.WindowTitle = "LSENext Repair Native Menu"
+Write-Host "LSENext Repair Native Menu"
+Write-Host "This window will show progress and then open diagnostics."
+Write-Host ""
+Write-Progress -Activity "LSENext Repair Native Menu" -Status "Starting" -PercentComplete 0
+& {} repair-native-menu-run
+$exitCode = $LASTEXITCODE
+Write-Progress -Activity "LSENext Repair Native Menu" -Completed
+Write-Host ""
+Write-Host "Repair command exited with code $exitCode."
+Write-Host "Diagnostics should be open in Notepad. You can close this window."
+Start-Sleep -Seconds 3
+exit $exitCode
+"#,
+        ps_quote(&exe.to_string_lossy())
+    );
+
+    Command::new("powershell.exe")
+        .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command"])
+        .arg(script)
         .spawn()
-        .context("failed to open diagnostics in Notepad")?;
+        .context("failed to start visible repair window")?;
     Ok(())
 }
 
@@ -143,21 +161,27 @@ fn repair_native_menu() -> Result<()> {
     push_line(&mut repair, "LSENext repair log");
     push_line(&mut repair, "==================");
 
+    write_repair_progress(&repair)?;
     run_repair_step(
         &mut repair,
+        10,
         "cleanup classic context menu",
         cleanup_classic_context_menu_script(),
     );
+    write_repair_progress(&repair)?;
     run_repair_step(
         &mut repair,
+        35,
         "unregister existing package identity",
         unregister_package_identity_script(),
     );
+    write_repair_progress(&repair)?;
     if let Ok(install_root) = current_install_root() {
         let certificate = install_root.join("LSENext.cer");
         if certificate.is_file() {
             run_repair_step(
                 &mut repair,
+                60,
                 "trust package certificate",
                 &format!(
                     "Import-Certificate -FilePath {} -CertStoreLocation Cert:\\CurrentUser\\TrustedPeople | Out-Null",
@@ -170,10 +194,12 @@ fn repair_native_menu() -> Result<()> {
                 "STEP trust package certificate: skipped, certificate missing",
             );
         }
+        write_repair_progress(&repair)?;
 
         let package = install_root.join("LSENext.identity.msix");
         run_repair_step(
             &mut repair,
+            85,
             "register package identity",
             &format!(
                 "Add-AppxPackage -Path {} -ExternalLocation {} -ForceApplicationShutdown -ForceUpdateFromAnyVersion",
@@ -184,6 +210,7 @@ fn repair_native_menu() -> Result<()> {
     } else {
         push_line(&mut repair, "STEP locate install root: failed");
     }
+    write_repair_progress(&repair)?;
 
     write_and_open_diagnostics(Some(&repair))
 }
@@ -321,6 +348,15 @@ fn write_and_open_diagnostics(prefix: Option<&str>) -> Result<()> {
     Ok(())
 }
 
+fn write_repair_progress(repair: &str) -> Result<()> {
+    let path = diagnostics_path()?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::write(path, repair)?;
+    Ok(())
+}
+
 fn push_line(output: &mut String, value: &str) {
     output.push_str(value);
     output.push_str("\r\n");
@@ -435,17 +471,20 @@ fn run_powershell_script(script: &str) -> Result<()> {
     Ok(())
 }
 
-fn run_repair_step(repair: &mut String, name: &str, script: &str) {
+fn run_repair_step(repair: &mut String, percent: u32, name: &str, script: &str) {
     push_line(repair, "");
+    println!("[{percent:>3}%] {name}");
     push_line(repair, &format!("STEP {name}: started"));
-    match powershell_output_with_timeout(script, Duration::from_secs(45)) {
+    match powershell_output_with_timeout(script, Duration::from_secs(15)) {
         Ok(text) => {
+            println!("[{percent:>3}%] {name}: ok");
             push_line(repair, &format!("STEP {name}: ok"));
             if !text.trim().is_empty() {
                 push_line(repair, text.trim());
             }
         }
         Err(err) => {
+            println!("[{percent:>3}%] {name}: ERROR");
             push_line(repair, &format!("STEP {name}: ERROR: {err:#}"));
         }
     }
