@@ -114,6 +114,7 @@ fn sync_explorer_menu(state: Option<&SelectionState>) -> Result<(), StateError> 
     platform::sync_explorer_menu(state)
 }
 
+#[cfg(test)]
 fn menu_subcommands(state: Option<&SelectionState>) -> (String, String) {
     const PICK_SOURCE: &str = "LSENext.PickSource";
     const DROP_SYMBOLIC: &str = "LSENext.DropSymbolic";

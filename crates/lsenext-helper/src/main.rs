@@ -128,24 +128,95 @@ fn show_diagnostics() -> Result<()> {
 }
 
 fn launch_repair_native_menu() -> Result<()> {
-    let exe = env::current_exe().context("failed to locate LSENext helper")?;
+    let install_root = current_install_root()?;
     let script = format!(
         r#"
 $Host.UI.RawUI.WindowTitle = "LSENext Repair Native Menu"
-Write-Host "LSENext Repair Native Menu"
-Write-Host "This window will show progress and then open diagnostics."
-Write-Host ""
-Write-Progress -Activity "LSENext Repair Native Menu" -Status "Starting" -PercentComplete 0
-& {} repair-native-menu-run
-$exitCode = $LASTEXITCODE
+"LSENext Repair Native Menu"
+"This window shows repair progress and writes diagnostics."
+""
+
+$installRoot = {}
+$diag = Join-Path $env:LOCALAPPDATA "LSENext\diagnostics.txt"
+$helper = Join-Path $installRoot "lsenext-helper.exe"
+$package = Join-Path $installRoot "LSENext.identity.msix"
+$certificate = Join-Path $installRoot "LSENext.cer"
+New-Item -ItemType Directory -Force -Path (Split-Path $diag) | Out-Null
+"LSENext repair log" | Set-Content -Path $diag
+"==================" | Add-Content -Path $diag
+
+function Step($Percent, $Name, [scriptblock]$Action) {{
+  Write-Progress -Activity "LSENext Repair Native Menu" -Status $Name -PercentComplete $Percent
+  Write-Host ("[{{0,3}}%] {{1}}" -f $Percent, $Name)
+  "" | Add-Content -Path $diag
+  "STEP $Name: started" | Add-Content -Path $diag
+  try {{
+    $output = & $Action 2>&1 | Out-String
+    if ($output.Trim().Length -gt 0) {{ $output.Trim() | Add-Content -Path $diag }}
+    "STEP $Name: ok" | Add-Content -Path $diag
+    Write-Host ("[{{0,3}}%] {{1}}: ok" -f $Percent, $Name)
+  }} catch {{
+    "STEP $Name: ERROR: $($_.Exception.Message)" | Add-Content -Path $diag
+    Write-Host ("[{{0,3}}%] {{1}}: ERROR" -f $Percent, $Name)
+    Write-Host $_.Exception.Message
+  }}
+}}
+
+Step 10 "cleanup classic context menu" {{
+  $paths = @(
+    "HKCU:\Software\Classes\*\shell\LSENext",
+    "HKCU:\Software\Classes\Directory\shell\LSENext",
+    "HKCU:\Software\Classes\Directory\Background\shell\LSENext",
+    "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.PickSource",
+    "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.DropSymbolic",
+    "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.DropJunction",
+    "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.BackgroundDropSymbolic",
+    "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.BackgroundDropJunction",
+    "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.ClearSource",
+    "HKLM:\Software\Classes\*\shell\LSENext",
+    "HKLM:\Software\Classes\Directory\shell\LSENext",
+    "HKLM:\Software\Classes\Directory\Background\shell\LSENext",
+    "HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.PickSource",
+    "HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.DropSymbolic",
+    "HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.DropJunction",
+    "HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.BackgroundDropSymbolic",
+    "HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.BackgroundDropJunction",
+    "HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.ClearSource"
+  )
+  foreach ($path in $paths) {{
+    if (Test-Path $path) {{ Remove-Item -LiteralPath $path -Recurse -Force -ErrorAction SilentlyContinue }}
+  }}
+}}
+
+Step 35 "unregister existing package identity" {{
+  $pkg = Get-AppxPackage -Name Sunnylin.LSENext
+  if ($pkg) {{ Remove-AppxPackage -Package $pkg.PackageFullName }}
+}}
+
+Step 60 "trust package certificate" {{
+  if (Test-Path $certificate) {{
+    Import-Certificate -FilePath $certificate -CertStoreLocation Cert:\CurrentUser\TrustedPeople | Out-Null
+  }} else {{
+    "certificate missing: $certificate"
+  }}
+}}
+
+Step 85 "register package identity" {{
+  if (-not (Test-Path $package)) {{ throw "package missing: $package" }}
+  Add-AppxPackage -Path $package -ExternalLocation $installRoot -ForceApplicationShutdown -ForceUpdateFromAnyVersion
+}}
+
+Write-Progress -Activity "LSENext Repair Native Menu" -Status "Opening diagnostics" -PercentComplete 100
+Write-Host "[100%] opening diagnostics"
+"" | Add-Content -Path $diag
+"--- helper diagnostics follows ---" | Add-Content -Path $diag
+Start-Process -FilePath $helper -ArgumentList "diagnostics" -Wait
 Write-Progress -Activity "LSENext Repair Native Menu" -Completed
 Write-Host ""
-Write-Host "Repair command exited with code $exitCode."
-Write-Host "Diagnostics should be open in Notepad. You can close this window."
-Start-Sleep -Seconds 3
-exit $exitCode
+Write-Host "Done. Diagnostics should be open in Notepad."
+Start-Sleep -Seconds 5
 "#,
-        ps_quote(&exe.to_string_lossy())
+        ps_quote(&install_root.to_string_lossy())
     );
 
     Command::new("powershell.exe")
