@@ -50,11 +50,14 @@ fn run() -> Result<()> {
         "register-package" => {
             register_package_identity()?;
         }
+        "trust-package-certificate-machine" => {
+            trust_package_certificate_machine()?;
+        }
         "unregister-package" => {
             unregister_package_identity()?;
         }
         _ => {
-            bail!("usage: lsenext-helper <pick-source|drop-symlink|drop-junction|clear|about|diagnostics|repair-native-menu|repair-native-menu-run|register-package|unregister-package> [paths]");
+            bail!("usage: lsenext-helper <pick-source|drop-symlink|drop-junction|clear|about|diagnostics|repair-native-menu|repair-native-menu-run|register-package|trust-package-certificate-machine|unregister-package> [paths]");
         }
     }
     Ok(())
@@ -525,6 +528,8 @@ fn powershell_output(script: &str) -> Result<String> {
 
 fn register_package_identity() -> Result<()> {
     cleanup_classic_context_menu().context("failed to clean classic Explorer menu registration")?;
+    unregister_package_identity()
+        .context("failed to unregister existing LSENext package identity")?;
 
     let install_root = current_install_root()?;
     let package = install_root.join("LSENext.identity.msix");
@@ -549,6 +554,23 @@ fn register_package_identity() -> Result<()> {
         ps_quote(&install_root.to_string_lossy())
     ))
     .context("failed to register LSENext package identity")
+}
+
+fn trust_package_certificate_machine() -> Result<()> {
+    let install_root = current_install_root()?;
+    let certificate = install_root.join("LSENext.cer");
+    if !certificate.is_file() {
+        bail!(
+            "missing package certificate file: {}",
+            certificate.display()
+        );
+    }
+    run_powershell_script(&format!(
+        "Import-Certificate -FilePath {} -CertStoreLocation Cert:\\LocalMachine\\Root | Out-Null; Import-Certificate -FilePath {} -CertStoreLocation Cert:\\LocalMachine\\TrustedPeople | Out-Null",
+        ps_quote(&certificate.to_string_lossy()),
+        ps_quote(&certificate.to_string_lossy())
+    ))
+    .context("failed to trust LSENext package certificate machine-wide")
 }
 
 fn unregister_package_identity() -> Result<()> {

@@ -63,21 +63,31 @@ function Invoke-WindowsSdkTool {
 function New-LSENextLogo {
     param(
         [string]$Path,
-        [int]$Size
+        [int]$Size,
+        [string]$Source
     )
     $bitmap = New-Object System.Drawing.Bitmap $Size, $Size
     $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
     try {
         $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
         $graphics.Clear([System.Drawing.Color]::FromArgb(0, 0, 0, 0))
-        $brush = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(0, 120, 212))
-        $graphics.FillRectangle($brush, 0, 0, $Size, $Size)
-        $brush.Dispose()
-        $pen = New-Object System.Drawing.Pen ([System.Drawing.Color]::White), ([Math]::Max(2, [int]($Size / 11)))
-        $margin = [int]($Size * 0.24)
-        $graphics.DrawLine($pen, $margin, [int]($Size * 0.42), [int]($Size * 0.58), [int]($Size * 0.42))
-        $graphics.DrawLine($pen, [int]($Size * 0.42), [int]($Size * 0.58), [int]($Size - $margin), [int]($Size * 0.58))
-        $pen.Dispose()
+        if ($Source -and (Test-Path $Source)) {
+            $sourceImage = [System.Drawing.Image]::FromFile($Source)
+            try {
+                $graphics.DrawImage($sourceImage, 0, 0, $Size, $Size)
+            } finally {
+                $sourceImage.Dispose()
+            }
+        } else {
+            $brush = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(0, 120, 212))
+            $graphics.FillRectangle($brush, 0, 0, $Size, $Size)
+            $brush.Dispose()
+            $pen = New-Object System.Drawing.Pen ([System.Drawing.Color]::White), ([Math]::Max(2, [int]($Size / 11)))
+            $margin = [int]($Size * 0.24)
+            $graphics.DrawLine($pen, $margin, [int]($Size * 0.42), [int]($Size * 0.58), [int]($Size * 0.42))
+            $graphics.DrawLine($pen, [int]($Size * 0.42), [int]($Size * 0.58), [int]($Size - $margin), [int]($Size * 0.58))
+            $pen.Dispose()
+        }
         $bitmap.Save($Path, [System.Drawing.Imaging.ImageFormat]::Png)
     } finally {
         $graphics.Dispose()
@@ -87,7 +97,8 @@ function New-LSENextLogo {
 
 function New-LSENextIcon {
     param(
-        [string]$Path
+        [string]$Path,
+        [string]$Source
     )
 
     $size = 32
@@ -97,17 +108,26 @@ function New-LSENextIcon {
         $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
         $graphics.Clear([System.Drawing.Color]::FromArgb(0, 0, 0, 0))
 
-        $back = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(0, 120, 212))
-        $graphics.FillEllipse($back, 3, 3, 26, 26)
-        $back.Dispose()
+        if ($Source -and (Test-Path $Source)) {
+            $sourceImage = [System.Drawing.Image]::FromFile($Source)
+            try {
+                $graphics.DrawImage($sourceImage, 0, 0, $size, $size)
+            } finally {
+                $sourceImage.Dispose()
+            }
+        } else {
+            $back = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(0, 120, 212))
+            $graphics.FillEllipse($back, 3, 3, 26, 26)
+            $back.Dispose()
 
-        $pen = New-Object System.Drawing.Pen ([System.Drawing.Color]::White), 3.4
-        $pen.StartCap = [System.Drawing.Drawing2D.LineCap]::Round
-        $pen.EndCap = [System.Drawing.Drawing2D.LineCap]::Round
-        $graphics.DrawArc($pen, 7, 9, 12, 10, 135, 235)
-        $graphics.DrawArc($pen, 13, 13, 12, 10, -45, 235)
-        $graphics.DrawLine($pen, 13, 18, 19, 14)
-        $pen.Dispose()
+            $pen = New-Object System.Drawing.Pen ([System.Drawing.Color]::White), 3.4
+            $pen.StartCap = [System.Drawing.Drawing2D.LineCap]::Round
+            $pen.EndCap = [System.Drawing.Drawing2D.LineCap]::Round
+            $graphics.DrawArc($pen, 7, 9, 12, 10, 135, 235)
+            $graphics.DrawArc($pen, 13, 13, 12, 10, -45, 235)
+            $graphics.DrawLine($pen, 13, 18, 19, 14)
+            $pen.Dispose()
+        }
 
         $stream = New-Object System.IO.MemoryStream
         $bitmap.Save($stream, [System.Drawing.Imaging.ImageFormat]::Png)
@@ -138,10 +158,11 @@ function New-LSENextIcon {
         $bitmap.Dispose()
     }
 }
-New-LSENextLogo -Path (Join-Path $assets "StoreLogo.png") -Size 50
-New-LSENextLogo -Path (Join-Path $assets "Square150x150Logo.png") -Size 150
-New-LSENextLogo -Path (Join-Path $assets "Square44x44Logo.png") -Size 44
-New-LSENextIcon -Path (Join-Path $assets "LSENext.ico")
+$sourceIcon = Join-Path $repo "assets\icon.png"
+New-LSENextLogo -Path (Join-Path $assets "StoreLogo.png") -Size 50 -Source $sourceIcon
+New-LSENextLogo -Path (Join-Path $assets "Square150x150Logo.png") -Size 150 -Source $sourceIcon
+New-LSENextLogo -Path (Join-Path $assets "Square44x44Logo.png") -Size 44 -Source $sourceIcon
+New-LSENextIcon -Path (Join-Path $assets "LSENext.ico") -Source $sourceIcon
 
 $identityRoot = Join-Path $dist "identity-package"
 if (Test-Path $identityRoot) {
