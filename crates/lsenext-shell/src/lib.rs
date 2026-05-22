@@ -417,15 +417,16 @@ fn menu_command_kinds(root_kind: RootKind, state: Option<SelectionState>) -> Vec
 }
 
 fn run_helper_command(command: &str) -> Result<(), std::io::Error> {
-    let helper = MODULE_PATH
-        .get()
-        .and_then(|path| {
-            path.parent()
-                .map(|parent| parent.join("lsenext-helper.exe"))
-        })
-        .unwrap_or_else(|| PathBuf::from("lsenext-helper.exe"));
+    let helper = helper_path().unwrap_or_else(|| PathBuf::from("lsenext-helper.exe"));
     Command::new(helper).arg(command).spawn()?;
     Ok(())
+}
+
+fn helper_path() -> Option<PathBuf> {
+    MODULE_PATH.get().and_then(|path| {
+        path.parent()
+            .map(|parent| parent.join("lsenext-helper.exe"))
+    })
 }
 
 fn module_path(module: HINSTANCE) -> Option<PathBuf> {
@@ -472,11 +473,14 @@ fn should_try_elevated(error: &lsenext_core::links::LinkError) -> bool {
 }
 
 fn run_elevated_helper(kind: LinkKind, target: &Path) -> Result<(), String> {
-    let exe = std::env::current_exe().map_err(|err| err.to_string())?;
-    let helper = exe
-        .parent()
-        .ok_or_else(|| "cannot locate LSENext helper next to the shell extension".to_string())?
-        .join("lsenext-helper.exe");
+    let helper = helper_path()
+        .ok_or_else(|| "cannot locate LSENext helper next to the shell extension".to_string())?;
+    if !helper.is_file() {
+        return Err(format!(
+            "LSENext helper does not exist: {}",
+            helper.display()
+        ));
+    }
     let command = match kind {
         LinkKind::Symbolic => "drop-symlink",
         LinkKind::Junction => "drop-junction",
