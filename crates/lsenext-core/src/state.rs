@@ -119,17 +119,24 @@ fn menu_subcommands(state: Option<&SelectionState>) -> (String, String) {
     const PICK_SOURCE: &str = "LSENext.PickSource";
     const DROP_SYMBOLIC: &str = "LSENext.DropSymbolic";
     const DROP_JUNCTION: &str = "LSENext.DropJunction";
+    const DROP_HARDLINK: &str = "LSENext.DropHardLink";
     const BACKGROUND_DROP_SYMBOLIC: &str = "LSENext.BackgroundDropSymbolic";
     const BACKGROUND_DROP_JUNCTION: &str = "LSENext.BackgroundDropJunction";
+    const BACKGROUND_DROP_HARDLINK: &str = "LSENext.BackgroundDropHardLink";
     const CLEAR_SOURCE: &str = "LSENext.ClearSource";
 
     let can_junction = state
         .map(|state| state.sources.iter().all(|source| source.is_dir))
         .unwrap_or(false);
+    let can_hardlink = state
+        .map(|state| state.sources.iter().all(|source| !source.is_dir))
+        .unwrap_or(false);
     let has_state = state.is_some();
 
     let directory_commands = if has_state && can_junction {
         [PICK_SOURCE, DROP_SYMBOLIC, DROP_JUNCTION, CLEAR_SOURCE].join(";")
+    } else if has_state && can_hardlink {
+        [PICK_SOURCE, DROP_SYMBOLIC, DROP_HARDLINK, CLEAR_SOURCE].join(";")
     } else if has_state {
         [PICK_SOURCE, DROP_SYMBOLIC, CLEAR_SOURCE].join(";")
     } else {
@@ -140,6 +147,13 @@ fn menu_subcommands(state: Option<&SelectionState>) -> (String, String) {
         [
             BACKGROUND_DROP_SYMBOLIC,
             BACKGROUND_DROP_JUNCTION,
+            CLEAR_SOURCE,
+        ]
+        .join(";")
+    } else if has_state && can_hardlink {
+        [
+            BACKGROUND_DROP_SYMBOLIC,
+            BACKGROUND_DROP_HARDLINK,
             CLEAR_SOURCE,
         ]
         .join(";")
@@ -225,11 +239,11 @@ mod tests {
         let (directory, background) = menu_subcommands(Some(&state));
         assert_eq!(
             directory,
-            "LSENext.PickSource;LSENext.DropSymbolic;LSENext.ClearSource"
+            "LSENext.PickSource;LSENext.DropSymbolic;LSENext.DropHardLink;LSENext.ClearSource"
         );
         assert_eq!(
             background,
-            "LSENext.BackgroundDropSymbolic;LSENext.ClearSource"
+            "LSENext.BackgroundDropSymbolic;LSENext.BackgroundDropHardLink;LSENext.ClearSource"
         );
     }
 

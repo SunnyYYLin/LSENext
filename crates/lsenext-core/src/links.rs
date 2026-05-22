@@ -7,12 +7,15 @@ use thiserror::Error;
 pub enum LinkKind {
     Symbolic,
     Junction,
+    HardLink,
 }
 
 #[derive(Debug, Error)]
 pub enum LinkError {
     #[error("junctions can only target directories: {0}")]
     JunctionNeedsDirectory(PathBuf),
+    #[error("hard links can only target files: {0}")]
+    HardLinkNeedsFile(PathBuf),
     #[error("target directory does not exist: {0}")]
     MissingTargetDirectory(PathBuf),
     #[error("destination already exists: {0}")]
@@ -42,6 +45,9 @@ pub fn create_link(
 ) -> Result<PathBuf, LinkError> {
     if kind == LinkKind::Junction && !source.is_dir {
         return Err(LinkError::JunctionNeedsDirectory(source.path.clone()));
+    }
+    if kind == LinkKind::HardLink && source.is_dir {
+        return Err(LinkError::HardLinkNeedsFile(source.path.clone()));
     }
 
     if !target_dir.is_dir() {
@@ -78,6 +84,13 @@ fn create_platform_link(
         }
         LinkKind::Junction => {
             junction::create(&source.path, destination).map_err(|error| LinkError::CreateFailed {
+                source: source.path.clone(),
+                destination: destination.to_path_buf(),
+                error,
+            })
+        }
+        LinkKind::HardLink => {
+            fs::hard_link(&source.path, destination).map_err(|error| LinkError::CreateFailed {
                 source: source.path.clone(),
                 destination: destination.to_path_buf(),
                 error,
@@ -277,6 +290,16 @@ mod tests {
         };
         let err = create_link(LinkKind::Junction, &source, Path::new(r"C:\missing")).unwrap_err();
         assert!(matches!(err, LinkError::JunctionNeedsDirectory(_)));
+    }
+
+    #[test]
+    fn hard_links_reject_directories() {
+        let source = PickedSource {
+            path: PathBuf::from(r"C:\folder"),
+            is_dir: true,
+        };
+        let err = create_link(LinkKind::HardLink, &source, Path::new(r"C:\missing")).unwrap_err();
+        assert!(matches!(err, LinkError::HardLinkNeedsFile(_)));
     }
 
     #[test]

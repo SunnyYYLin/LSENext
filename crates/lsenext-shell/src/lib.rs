@@ -35,6 +35,8 @@ pub const CLSID_LSENEXT_DIRECTORY_ROOT: GUID =
 pub const CLSID_LSENEXT_BACKGROUND_ROOT: GUID =
     GUID::from_u128(0x32ad61d5_1919_4582_95dc_d9eb0bb6e006);
 pub const CLSID_LSENEXT_DIAGNOSTICS: GUID = GUID::from_u128(0x32ad61d5_1919_4582_95dc_d9eb0bb6e007);
+pub const CLSID_LSENEXT_DROP_HARDLINK: GUID =
+    GUID::from_u128(0x32ad61d5_1919_4582_95dc_d9eb0bb6e008);
 
 static MODULE_PATH: OnceLock<PathBuf> = OnceLock::new();
 
@@ -50,6 +52,7 @@ enum CommandKind {
     PickSource,
     DropSymbolic,
     DropJunction,
+    DropHardLink,
     ClearSource,
     #[cfg(feature = "diagnostics")]
     Diagnostics,
@@ -125,6 +128,7 @@ impl IExplorerCommand_Impl for MenuCommand_Impl {
             CommandKind::PickSource => "Pick Link Source",
             CommandKind::DropSymbolic => "Drop Symbolic Link",
             CommandKind::DropJunction => "Drop Directory Junction",
+            CommandKind::DropHardLink => "Drop Hard Link",
             CommandKind::ClearSource => "Clear Link Source",
             #[cfg(feature = "diagnostics")]
             CommandKind::Diagnostics => "Debug Diagnostics",
@@ -146,6 +150,7 @@ impl IExplorerCommand_Impl for MenuCommand_Impl {
             CommandKind::PickSource => CLSID_LSENEXT_PICK_SOURCE,
             CommandKind::DropSymbolic => CLSID_LSENEXT_DROP_SYMLINK,
             CommandKind::DropJunction => CLSID_LSENEXT_DROP_JUNCTION,
+            CommandKind::DropHardLink => CLSID_LSENEXT_DROP_HARDLINK,
             CommandKind::ClearSource => CLSID_LSENEXT_CLEAR_SOURCE,
             #[cfg(feature = "diagnostics")]
             CommandKind::Diagnostics => CLSID_LSENEXT_DIAGNOSTICS,
@@ -180,6 +185,18 @@ impl IExplorerCommand_Impl for MenuCommand_Impl {
                     ECS_HIDDEN.0
                 }
             }
+            CommandKind::DropHardLink => {
+                if load_state()
+                    .ok()
+                    .flatten()
+                    .map(|state| state.sources.iter().all(|source| !source.is_dir))
+                    .unwrap_or(false)
+                {
+                    ECS_ENABLED.0
+                } else {
+                    ECS_HIDDEN.0
+                }
+            }
         };
         Ok(state as u32)
     }
@@ -199,6 +216,7 @@ impl IExplorerCommand_Impl for MenuCommand_Impl {
                 }),
             CommandKind::DropSymbolic => drop_links(items, LinkKind::Symbolic),
             CommandKind::DropJunction => drop_links(items, LinkKind::Junction),
+            CommandKind::DropHardLink => drop_links(items, LinkKind::HardLink),
             CommandKind::ClearSource => clear_state().map(|_| ()).map_err(|err| err.to_string()),
             #[cfg(feature = "diagnostics")]
             CommandKind::Diagnostics => {
@@ -368,6 +386,7 @@ pub extern "system" fn DllGetClassObject(
             CLSID_LSENEXT_PICK_SOURCE => FactoryKind::Menu(CommandKind::PickSource),
             CLSID_LSENEXT_DROP_SYMLINK => FactoryKind::Menu(CommandKind::DropSymbolic),
             CLSID_LSENEXT_DROP_JUNCTION => FactoryKind::Menu(CommandKind::DropJunction),
+            CLSID_LSENEXT_DROP_HARDLINK => FactoryKind::Menu(CommandKind::DropHardLink),
             CLSID_LSENEXT_CLEAR_SOURCE => FactoryKind::Menu(CommandKind::ClearSource),
             #[cfg(feature = "diagnostics")]
             CLSID_LSENEXT_DIAGNOSTICS => FactoryKind::Menu(CommandKind::Diagnostics),
@@ -391,7 +410,7 @@ pub extern "system" fn DllUnregisterServer() -> HRESULT {
 
 #[no_mangle]
 pub extern "system" fn LSENextVersion() -> PCSTR {
-    PCSTR(c"LSENext 0.0.2".as_ptr() as _)
+    PCSTR(c"LSENext 0.1.0".as_ptr() as _)
 }
 
 fn enumerate_commands(root_kind: RootKind) -> windows::core::Result<IEnumExplorerCommand> {
@@ -421,6 +440,9 @@ fn menu_command_kinds(root_kind: RootKind, state: Option<SelectionState>) -> Vec
         commands.push(CommandKind::DropSymbolic);
         if state.sources.iter().all(|source| source.is_dir) {
             commands.push(CommandKind::DropJunction);
+        }
+        if state.sources.iter().all(|source| !source.is_dir) {
+            commands.push(CommandKind::DropHardLink);
         }
         commands.push(CommandKind::ClearSource);
     }
@@ -505,6 +527,7 @@ fn run_elevated_helper(kind: LinkKind, target: &Path) -> Result<(), String> {
     let command = match kind {
         LinkKind::Symbolic => "drop-symlink",
         LinkKind::Junction => "drop-junction",
+        LinkKind::HardLink => "drop-hardlink",
     };
     let args = format!("{} \"{}\"", command, target.display());
     let verb: Vec<u16> = "runas".encode_utf16().chain(Some(0)).collect();
@@ -603,6 +626,7 @@ mod tests {
             with_diagnostics(vec![
                 CommandKind::PickSource,
                 CommandKind::DropSymbolic,
+                CommandKind::DropHardLink,
                 CommandKind::ClearSource,
             ])
         );
@@ -665,6 +689,50 @@ mod tests {
             with_diagnostics(vec![
                 CommandKind::DropSymbolic,
                 CommandKind::DropJunction,
+                CommandKind::ClearSource,
+            ])
+        );
+    }
+
+    #[test]
+    fn file_background_sources_offer_hard_links() {
+        let state = SelectionState {
+            picked_at_unix: 42,
+            sources: vec![PickedSource {
+                path: PathBuf::from(r"C:\src\file.txt"),
+                is_dir: false,
+            }],
+        };
+        assert_eq!(
+            menu_command_kinds(RootKind::Background, Some(state)),
+            with_diagnostics(vec![
+                CommandKind::DropSymbolic,
+                CommandKind::DropHardLink,
+                CommandKind::ClearSource,
+            ])
+        );
+    }
+
+    #[test]
+    fn mixed_sources_only_offer_symbolic_links() {
+        let state = SelectionState {
+            picked_at_unix: 42,
+            sources: vec![
+                PickedSource {
+                    path: PathBuf::from(r"C:\src\file.txt"),
+                    is_dir: false,
+                },
+                PickedSource {
+                    path: PathBuf::from(r"C:\src\folder"),
+                    is_dir: true,
+                },
+            ],
+        };
+        assert_eq!(
+            menu_command_kinds(RootKind::Directory, Some(state)),
+            with_diagnostics(vec![
+                CommandKind::PickSource,
+                CommandKind::DropSymbolic,
                 CommandKind::ClearSource,
             ])
         );

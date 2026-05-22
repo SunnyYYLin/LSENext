@@ -40,6 +40,7 @@ fn run() -> Result<()> {
         }
         "drop-symlink" => drop_links(LinkKind::Symbolic, args.next())?,
         "drop-junction" => drop_links(LinkKind::Junction, args.next())?,
+        "drop-hardlink" => drop_links(LinkKind::HardLink, args.next())?,
         "clear" => {
             clear_state()?;
         }
@@ -72,7 +73,7 @@ fn run() -> Result<()> {
             unregister_package_identity()?;
         }
         _ => {
-            bail!("usage: lsenext-helper <pick-source|drop-symlink|drop-junction|clear|about|register-package|trust-package-certificate-machine|unregister-package> [paths]");
+            bail!("usage: lsenext-helper <pick-source|drop-symlink|drop-junction|drop-hardlink|clear|about|register-package|trust-package-certificate-machine|unregister-package> [paths]");
         }
     }
     Ok(())
@@ -85,6 +86,9 @@ fn drop_links(kind: LinkKind, target: Option<String>) -> Result<()> {
     let state = load_state()?.context("no picked LSENext source is stored")?;
     if kind == LinkKind::Junction && state.sources.iter().any(|source| !source.is_dir) {
         bail!("Directory junctions can only be created from picked directory sources.");
+    }
+    if kind == LinkKind::HardLink && state.sources.iter().any(|source| source.is_dir) {
+        bail!("Hard links can only be created from picked file sources.");
     }
     for source in &state.sources {
         if let Err(err) = create_link(kind, source, &target) {
@@ -112,6 +116,7 @@ fn run_elevated(kind: LinkKind, target: &Path) -> Result<()> {
     let command = match kind {
         LinkKind::Symbolic => "drop-symlink",
         LinkKind::Junction => "drop-junction",
+        LinkKind::HardLink => "drop-hardlink",
     };
     let params = format!("{} \"{}\"", command, target.display());
     let verb = wide_null("runas");
@@ -138,7 +143,7 @@ fn run_elevated(kind: LinkKind, target: &Path) -> Result<()> {
 }
 
 fn show_about() {
-    show_info("LSENext 0.0.2\nQuick symbolic link and directory junction creation.");
+    show_info("LSENext 0.1.0\nQuick symbolic, hard link, and directory junction creation.");
 }
 
 #[cfg(feature = "diagnostics")]
@@ -209,8 +214,10 @@ Step 10 "cleanup classic context menu" {
     "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.PickSource",
     "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.DropSymbolic",
     "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.DropJunction",
+    "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.DropHardLink",
     "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.BackgroundDropSymbolic",
     "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.BackgroundDropJunction",
+    "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.BackgroundDropHardLink",
     "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.ClearSource",
     "HKLM:\Software\Classes\*\shell\LSENext",
     "HKLM:\Software\Classes\Directory\shell\LSENext",
@@ -218,8 +225,10 @@ Step 10 "cleanup classic context menu" {
     "HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.PickSource",
     "HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.DropSymbolic",
     "HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.DropJunction",
+    "HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.DropHardLink",
     "HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.BackgroundDropSymbolic",
     "HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.BackgroundDropJunction",
+    "HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.BackgroundDropHardLink",
     "HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.ClearSource"
   )
   foreach ($path in $paths) {
@@ -620,8 +629,10 @@ $paths = @(
   "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.PickSource",
   "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.DropSymbolic",
   "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.DropJunction",
+  "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.DropHardLink",
   "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.BackgroundDropSymbolic",
   "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.BackgroundDropJunction",
+  "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.BackgroundDropHardLink",
   "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.ClearSource",
   "HKLM:\Software\Classes\*\shell\LSENext",
   "HKLM:\Software\Classes\Directory\shell\LSENext",
@@ -629,8 +640,10 @@ $paths = @(
   "HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.PickSource",
   "HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.DropSymbolic",
   "HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.DropJunction",
+  "HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.DropHardLink",
   "HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.BackgroundDropSymbolic",
   "HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.BackgroundDropJunction",
+  "HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.BackgroundDropHardLink",
   "HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.ClearSource"
 )
 foreach ($path in $paths) {

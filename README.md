@@ -2,10 +2,11 @@
 
 LSENext is a modern Windows 11-oriented Link Shell Extension successor focused on fast Explorer context-menu creation of symbolic links and directory junctions.
 
-## v0.0.2 Scope
+## v0.1.0 Scope
 
 - Pick one or more link sources from Explorer.
 - Drop file/directory symbolic links into a target directory.
+- Drop file hard links for file sources.
 - Drop directory junctions for directory sources.
 - Register LSENext as a Windows 11 native Explorer context menu through package identity.
 - Preserve picked state per user at `%LOCALAPPDATA%\LSENext\state.json`.
