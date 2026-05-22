@@ -157,14 +157,14 @@ function Step($Percent, $Name, [scriptblock]$Action) {
   Write-Progress -Activity "LSENext Repair Native Menu" -Status $Name -PercentComplete $Percent
   Write-Host ("[{0,3}%] {1}" -f $Percent, $Name)
   "" | Add-Content -Path $diag
-  "STEP $Name: started" | Add-Content -Path $diag
+  "STEP ${Name}: started" | Add-Content -Path $diag
   try {
     $output = & $Action 2>&1 | Out-String
     if ($output.Trim().Length -gt 0) { $output.Trim() | Add-Content -Path $diag }
-    "STEP $Name: ok" | Add-Content -Path $diag
+    "STEP ${Name}: ok" | Add-Content -Path $diag
     Write-Host ("[{0,3}%] {1}: ok" -f $Percent, $Name)
   } catch {
-    "STEP $Name: ERROR: $($_.Exception.Message)" | Add-Content -Path $diag
+    "STEP ${Name}: ERROR: $($_.Exception.Message)" | Add-Content -Path $diag
     Write-Host ("[{0,3}%] {1}: ERROR" -f $Percent, $Name)
     Write-Host $_.Exception.Message
   }
