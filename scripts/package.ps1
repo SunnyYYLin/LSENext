@@ -84,9 +84,64 @@ function New-LSENextLogo {
         $bitmap.Dispose()
     }
 }
+
+function New-LSENextIcon {
+    param(
+        [string]$Path
+    )
+
+    $size = 32
+    $bitmap = New-Object System.Drawing.Bitmap $size, $size
+    $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+    try {
+        $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+        $graphics.Clear([System.Drawing.Color]::FromArgb(0, 0, 0, 0))
+
+        $back = New-Object System.Drawing.SolidBrush ([System.Drawing.Color]::FromArgb(0, 120, 212))
+        $graphics.FillEllipse($back, 3, 3, 26, 26)
+        $back.Dispose()
+
+        $pen = New-Object System.Drawing.Pen ([System.Drawing.Color]::White), 3.4
+        $pen.StartCap = [System.Drawing.Drawing2D.LineCap]::Round
+        $pen.EndCap = [System.Drawing.Drawing2D.LineCap]::Round
+        $graphics.DrawArc($pen, 7, 9, 12, 10, 135, 235)
+        $graphics.DrawArc($pen, 13, 13, 12, 10, -45, 235)
+        $graphics.DrawLine($pen, 13, 18, 19, 14)
+        $pen.Dispose()
+
+        $stream = New-Object System.IO.MemoryStream
+        $bitmap.Save($stream, [System.Drawing.Imaging.ImageFormat]::Png)
+        $png = $stream.ToArray()
+        $stream.Dispose()
+
+        $out = [System.IO.File]::Create($Path)
+        $writer = New-Object System.IO.BinaryWriter $out
+        try {
+            $writer.Write([UInt16]0)
+            $writer.Write([UInt16]1)
+            $writer.Write([UInt16]1)
+            $writer.Write([Byte]$size)
+            $writer.Write([Byte]$size)
+            $writer.Write([Byte]0)
+            $writer.Write([Byte]0)
+            $writer.Write([UInt16]1)
+            $writer.Write([UInt16]32)
+            $writer.Write([UInt32]$png.Length)
+            $writer.Write([UInt32]22)
+            $writer.Write($png)
+        } finally {
+            $writer.Dispose()
+            $out.Dispose()
+        }
+    } finally {
+        $graphics.Dispose()
+        $bitmap.Dispose()
+    }
+}
 New-LSENextLogo -Path (Join-Path $assets "StoreLogo.png") -Size 50
 New-LSENextLogo -Path (Join-Path $assets "Square150x150Logo.png") -Size 150
 New-LSENextLogo -Path (Join-Path $assets "Square44x44Logo.png") -Size 44
+New-LSENextIcon -Path (Join-Path $assets "LSENext.ico")
 
 $identityRoot = Join-Path $dist "identity-package"
 if (Test-Path $identityRoot) {

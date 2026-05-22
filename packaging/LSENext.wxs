@@ -35,6 +35,7 @@
       <Component Id="PackageAssets" Directory="ASSETSFOLDER" Guid="58BDBD4A-3D93-4FB9-8BBD-30EBBBE0B109">
         <File Source="$(var.SourceDir)\Assets\StoreLogo.png" />
         <File Source="$(var.SourceDir)\Assets\Square150x150Logo.png" />
+        <File Source="$(var.SourceDir)\Assets\LSENext.ico" />
         <File Source="$(var.SourceDir)\Assets\Square44x44Logo.png" KeyPath="yes" />
       </Component>
       <Component Id="ShellRegistration" Guid="58BDBD4A-3D93-4FB9-8BBD-30EBBBE0B107">

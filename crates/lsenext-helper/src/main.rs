@@ -171,7 +171,7 @@ function Step($Percent, $Name, [scriptblock]$Action) {
 }
 
 Step 5 "check installed files" {
-  foreach ($path in @($package, $certificate, (Join-Path $installRoot "lsenext-shell.dll"), (Join-Path $installRoot "AppxManifest.xml"))) {
+  foreach ($path in @($package, $certificate, (Join-Path $installRoot "lsenext-shell.dll"), (Join-Path $installRoot "AppxManifest.xml"), (Join-Path $installRoot "Assets\LSENext.ico"))) {
     if (Test-Path $path) {
       $item = Get-Item -LiteralPath $path
       "$path exists size=$($item.Length)"
@@ -394,6 +394,7 @@ fn build_diagnostics() -> String {
             "Assets\\StoreLogo.png",
             "Assets\\Square150x150Logo.png",
             "Assets\\Square44x44Logo.png",
+            "Assets\\LSENext.ico",
         ] {
             let path = root.join(name);
             let size = fs::metadata(&path).map(|metadata| metadata.len()).ok();

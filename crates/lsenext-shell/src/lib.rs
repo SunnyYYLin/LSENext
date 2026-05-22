@@ -75,7 +75,9 @@ impl IExplorerCommand_Impl for RootCommand_Impl {
     }
 
     fn GetIcon(&self, _items: Option<&IShellItemArray>) -> windows::core::Result<PWSTR> {
-        Err(E_NOTIMPL.into())
+        icon_path()
+            .and_then(|path| path.to_str().map(alloc_pwstr))
+            .unwrap_or_else(|| Err(E_NOTIMPL.into()))
     }
 
     fn GetToolTip(&self, _items: Option<&IShellItemArray>) -> windows::core::Result<PWSTR> {
@@ -127,7 +129,9 @@ impl IExplorerCommand_Impl for MenuCommand_Impl {
     }
 
     fn GetIcon(&self, _items: Option<&IShellItemArray>) -> windows::core::Result<PWSTR> {
-        Err(E_NOTIMPL.into())
+        icon_path()
+            .and_then(|path| path.to_str().map(alloc_pwstr))
+            .unwrap_or_else(|| Err(E_NOTIMPL.into()))
     }
 
     fn GetToolTip(&self, _items: Option<&IShellItemArray>) -> windows::core::Result<PWSTR> {
@@ -426,6 +430,13 @@ fn helper_path() -> Option<PathBuf> {
     MODULE_PATH.get().and_then(|path| {
         path.parent()
             .map(|parent| parent.join("lsenext-helper.exe"))
+    })
+}
+
+fn icon_path() -> Option<PathBuf> {
+    MODULE_PATH.get().and_then(|path| {
+        path.parent()
+            .map(|parent| parent.join("Assets\\LSENext.ico"))
     })
 }
 
