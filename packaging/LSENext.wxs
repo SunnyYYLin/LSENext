@@ -51,11 +51,9 @@
         <RegistryValue Root="HKLM" Key="Software\LSENext" Name="NativeContextMenu" Value="1" Type="integer" KeyPath="yes" />
       </Component>
       <Component Id="StartMenuShortcut" Guid="58BDBD4A-3D93-4FB9-8BBD-30EBBBE0B108">
-        <Shortcut Id="StartMenuShortcut" Directory="ProgramMenuFolder" Name="LSENext" Target="[INSTALLFOLDER]lsenext-helper.exe" Arguments="about" WorkingDirectory="INSTALLFOLDER" />
-<?if $(BuildConfiguration) = debug ?>
-        <Shortcut Id="RepairNativeMenuShortcut" Directory="ProgramMenuFolder" Name="LSENext Repair Native Menu" Target="[INSTALLFOLDER]lsenext-helper.exe" Arguments="repair-native-menu" WorkingDirectory="INSTALLFOLDER" />
-        <Shortcut Id="DiagnosticsShortcut" Directory="ProgramMenuFolder" Name="LSENext Diagnostics" Target="[INSTALLFOLDER]lsenext-helper.exe" Arguments="diagnostics" WorkingDirectory="INSTALLFOLDER" />
-<?endif ?>
+        <Shortcut Id="StartMenuShortcut" Directory="ProgramMenuFolder" Name="LSENext" Target="[INSTALLFOLDER]lsenext-helper.exe" Arguments="about" WorkingDirectory="INSTALLFOLDER" Icon="LSENextIcon" />
+        <RemoveFile Id="RemoveRepairNativeMenuShortcut" Name="LSENext Repair Native Menu.lnk" Directory="ProgramMenuFolder" On="both" />
+        <RemoveFile Id="RemoveDiagnosticsShortcut" Name="LSENext Diagnostics.lnk" Directory="ProgramMenuFolder" On="both" />
         <RegistryValue Root="HKCU" Key="Software\LSENext" Name="StartMenuShortcut" Value="1" Type="integer" KeyPath="yes" />
       </Component>
       <Component Id="ManifestFile" Guid="58BDBD4A-3D93-4FB9-8BBD-30EBBBE0B103">
@@ -76,6 +74,10 @@
         <File Source="$(var.SourceDir)\resources\strings\zh-CN.json" KeyPath="yes" />
       </Component>
     </ComponentGroup>
+  </Fragment>
+
+  <Fragment>
+    <Icon Id="LSENextIcon" SourceFile="$(var.SourceDir)\Assets\LSENext.ico" />
   </Fragment>
 
   <Fragment>
