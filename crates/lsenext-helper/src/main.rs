@@ -203,7 +203,8 @@ Step 10 "cleanup classic context menu" {
     "HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.ClearSource"
   )
   foreach ($path in $paths) {
-    if (Test-Path $path) { Remove-Item -LiteralPath $path -Recurse -Force -ErrorAction SilentlyContinue }
+    "cleanup $path"
+    if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Recurse -Force -ErrorAction SilentlyContinue }
   }
 }
 
@@ -248,7 +249,7 @@ Step 95 "collect registration diagnostics" {
     "HKLM:\Software\Classes\Directory\shell\LSENext",
     "HKLM:\Software\Classes\Directory\Background\shell\LSENext"
   )) {
-    "KEY $path exists=$(Test-Path $path)"
+    "KEY $path exists=$(Test-Path -LiteralPath $path)"
   }
 }
 
@@ -429,8 +430,8 @@ $keys = @(
   "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.PickSource"
 )
 foreach ($key in $keys) {
-  "KEY $key exists=$(Test-Path $key)"
-  if (Test-Path $key) { Get-ItemProperty $key | Format-List * }
+  "KEY $key exists=$(Test-Path -LiteralPath $key)"
+  if (Test-Path -LiteralPath $key) { Get-ItemProperty -LiteralPath $key | Format-List * }
 }
 "#,
     );
@@ -574,7 +575,7 @@ $paths = @(
   "HKLM:\Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.ClearSource"
 )
 foreach ($path in $paths) {
-  if (Test-Path $path) {
+  if (Test-Path -LiteralPath $path) {
     Remove-Item -LiteralPath $path -Recurse -Force -ErrorAction SilentlyContinue
   }
 }
