@@ -33,16 +33,26 @@ jobs:
           "RELEASE_TAG=$tag" >> $env:GITHUB_ENV
       - name: Test
         run: cargo test --workspace
-      - name: Package x64
+      - name: Package x64 debug
         shell: pwsh
         run: |
           dotnet tool restore
-          ./scripts/package.ps1 -Architecture x64 -ReleaseTag $env:RELEASE_TAG
-      - name: Package arm64
+          ./scripts/package.ps1 -Architecture x64 -Configuration debug -ReleaseTag $env:RELEASE_TAG
+      - name: Package x64 release
         shell: pwsh
         run: |
           dotnet tool restore
-          ./scripts/package.ps1 -Architecture arm64 -ReleaseTag $env:RELEASE_TAG
+          ./scripts/package.ps1 -Architecture x64 -Configuration release -ReleaseTag $env:RELEASE_TAG
+      - name: Package arm64 debug
+        shell: pwsh
+        run: |
+          dotnet tool restore
+          ./scripts/package.ps1 -Architecture arm64 -Configuration debug -ReleaseTag $env:RELEASE_TAG
+      - name: Package arm64 release
+        shell: pwsh
+        run: |
+          dotnet tool restore
+          ./scripts/package.ps1 -Architecture arm64 -Configuration release -ReleaseTag $env:RELEASE_TAG
       - name: Create GitHub alpha pre-release
         uses: softprops/action-gh-release@v2
         with:

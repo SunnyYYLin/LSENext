@@ -16,16 +16,26 @@ jobs:
           targets: x86_64-pc-windows-msvc,aarch64-pc-windows-msvc
       - name: Test
         run: cargo test --workspace
-      - name: Package x64
+      - name: Package x64 debug
         shell: pwsh
         run: |
           dotnet tool restore
-          ./scripts/package.ps1 -Architecture x64 -ReleaseTag v0.0.2
-      - name: Package arm64
+          ./scripts/package.ps1 -Architecture x64 -Configuration debug -ReleaseTag v0.0.2
+      - name: Package x64 release
         shell: pwsh
         run: |
           dotnet tool restore
-          ./scripts/package.ps1 -Architecture arm64 -ReleaseTag v0.0.2
+          ./scripts/package.ps1 -Architecture x64 -Configuration release -ReleaseTag v0.0.2
+      - name: Package arm64 debug
+        shell: pwsh
+        run: |
+          dotnet tool restore
+          ./scripts/package.ps1 -Architecture arm64 -Configuration debug -ReleaseTag v0.0.2
+      - name: Package arm64 release
+        shell: pwsh
+        run: |
+          dotnet tool restore
+          ./scripts/package.ps1 -Architecture arm64 -Configuration release -ReleaseTag v0.0.2
       - name: Create GitHub pre-release
         uses: softprops/action-gh-release@v2
         with:

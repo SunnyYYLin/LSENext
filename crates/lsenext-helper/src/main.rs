@@ -3,11 +3,17 @@
 use anyhow::{bail, Context, Result};
 use lsenext_core::{clear_state, create_link, load_state, save_sources, LinkKind};
 use std::env;
+#[cfg(feature = "diagnostics")]
 use std::fs;
+#[cfg(feature = "diagnostics")]
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Command;
+#[cfg(feature = "diagnostics")]
+use std::process::Stdio;
+#[cfg(feature = "diagnostics")]
 use std::thread;
+#[cfg(feature = "diagnostics")]
 use std::time::{Duration, Instant};
 use windows_sys::Win32::UI::Shell::ShellExecuteW;
 use windows_sys::Win32::UI::WindowsAndMessaging::{
@@ -40,13 +46,22 @@ fn run() -> Result<()> {
         "about" => {
             show_about();
         }
+        #[cfg(feature = "diagnostics")]
         "diagnostics" => {
             show_diagnostics()?;
         }
+        #[cfg(not(feature = "diagnostics"))]
+        "diagnostics" => bail!("LSENext diagnostics are only available in debug builds"),
+        #[cfg(feature = "diagnostics")]
         "repair-native-menu" => {
             launch_repair_native_menu()?;
         }
+        #[cfg(not(feature = "diagnostics"))]
+        "repair-native-menu" => bail!("LSENext repair is only available in debug builds"),
+        #[cfg(feature = "diagnostics")]
         "repair-native-menu-run" => repair_native_menu()?,
+        #[cfg(not(feature = "diagnostics"))]
+        "repair-native-menu-run" => bail!("LSENext repair is only available in debug builds"),
         "register-package" => {
             register_package_identity()?;
         }
@@ -57,7 +72,7 @@ fn run() -> Result<()> {
             unregister_package_identity()?;
         }
         _ => {
-            bail!("usage: lsenext-helper <pick-source|drop-symlink|drop-junction|clear|about|diagnostics|repair-native-menu|repair-native-menu-run|register-package|trust-package-certificate-machine|unregister-package> [paths]");
+            bail!("usage: lsenext-helper <pick-source|drop-symlink|drop-junction|clear|about|register-package|trust-package-certificate-machine|unregister-package> [paths]");
         }
     }
     Ok(())
@@ -126,10 +141,12 @@ fn show_about() {
     show_info("LSENext 0.0.2\nQuick symbolic link and directory junction creation.");
 }
 
+#[cfg(feature = "diagnostics")]
 fn show_diagnostics() -> Result<()> {
     write_and_open_diagnostics(None)
 }
 
+#[cfg(feature = "diagnostics")]
 fn launch_repair_native_menu() -> Result<()> {
     let install_root = current_install_root()?;
     let script_path = diagnostics_path()?
@@ -292,6 +309,7 @@ Write-Host $diag
     Ok(())
 }
 
+#[cfg(feature = "diagnostics")]
 fn repair_native_menu() -> Result<()> {
     let mut repair = String::new();
     push_line(&mut repair, "LSENext repair log");
@@ -354,6 +372,7 @@ fn repair_native_menu() -> Result<()> {
     write_and_open_diagnostics(Some(&repair))
 }
 
+#[cfg(feature = "diagnostics")]
 fn diagnostics_path() -> Result<PathBuf> {
     let local_app_data = env::var_os("LOCALAPPDATA").context("LOCALAPPDATA is not set")?;
     Ok(PathBuf::from(local_app_data)
@@ -361,6 +380,7 @@ fn diagnostics_path() -> Result<PathBuf> {
         .join("diagnostics.txt"))
 }
 
+#[cfg(feature = "diagnostics")]
 fn build_diagnostics() -> String {
     let install_root = current_install_root().ok();
     let state_path = env::var_os("LOCALAPPDATA")
@@ -466,6 +486,7 @@ Get-ChildItem "HKCU:\Software\Classes\ActivatableClasses\Package" -ErrorAction S
     output
 }
 
+#[cfg(feature = "diagnostics")]
 fn write_and_open_diagnostics(prefix: Option<&str>) -> Result<()> {
     let mut text = String::new();
     if let Some(prefix) = prefix {
@@ -488,6 +509,7 @@ fn write_and_open_diagnostics(prefix: Option<&str>) -> Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "diagnostics")]
 fn write_repair_progress(repair: &str) -> Result<()> {
     let path = diagnostics_path()?;
     if let Some(parent) = path.parent() {
@@ -497,11 +519,13 @@ fn write_repair_progress(repair: &str) -> Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "diagnostics")]
 fn push_line(output: &mut String, value: &str) {
     output.push_str(value);
     output.push_str("\r\n");
 }
 
+#[cfg(feature = "diagnostics")]
 fn push_ps(output: &mut String, title: &str, script: &str) {
     push_line(output, "");
     push_line(output, &format!("[powershell:{}]", title));
@@ -511,6 +535,7 @@ fn push_ps(output: &mut String, title: &str, script: &str) {
     }
 }
 
+#[cfg(feature = "diagnostics")]
 fn powershell_output(script: &str) -> Result<String> {
     let output = powershell_command(script)
         .stdout(Stdio::piped())
@@ -633,6 +658,7 @@ fn run_powershell_script(script: &str) -> Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "diagnostics")]
 fn run_repair_step(repair: &mut String, percent: u32, name: &str, script: &str) {
     push_line(repair, "");
     println!("[{percent:>3}%] {name}");
@@ -652,6 +678,7 @@ fn run_repair_step(repair: &mut String, percent: u32, name: &str, script: &str) 
     }
 }
 
+#[cfg(feature = "diagnostics")]
 fn powershell_output_with_timeout(script: &str, timeout: Duration) -> Result<String> {
     let mut child = powershell_command(script)
         .stdout(Stdio::piped())
@@ -678,6 +705,7 @@ fn powershell_output_with_timeout(script: &str, timeout: Duration) -> Result<Str
     }
 }
 
+#[cfg(feature = "diagnostics")]
 fn powershell_text_result(output: std::process::Output) -> Result<String> {
     let text = output_to_text(&output);
     if !output.status.success() {
@@ -686,6 +714,7 @@ fn powershell_text_result(output: std::process::Output) -> Result<String> {
     Ok(text)
 }
 
+#[cfg(feature = "diagnostics")]
 fn output_to_text(output: &std::process::Output) -> String {
     let mut text = String::new();
     text.push_str(&String::from_utf8_lossy(&output.stdout));

@@ -1,6 +1,7 @@
 param(
     [ValidateSet("x64", "arm64")]
     [string]$Architecture = "x64",
+    [ValidateSet("debug", "release")]
     [string]$Configuration = "release",
     [string]$ReleaseTag = "v0.0.1"
 )
@@ -9,12 +10,12 @@ $ErrorActionPreference = "Stop"
 $repo = Resolve-Path (Join-Path $PSScriptRoot "..")
 $targetTriple = if ($Architecture -eq "arm64") { "aarch64-pc-windows-msvc" } else { "x86_64-pc-windows-msvc" }
 $profileDir = if ($Configuration -eq "release") { "release" } else { "debug" }
-$dist = Join-Path $repo "dist\$Architecture"
+$dist = Join-Path $repo "dist\$Architecture-$Configuration"
 
 if ($Configuration -eq "release") {
     cargo build --workspace --target $targetTriple --release
 } else {
-    cargo build --workspace --target $targetTriple
+    cargo build --workspace --target $targetTriple --features lsenext-helper/diagnostics,lsenext-shell/diagnostics
 }
 if ($LASTEXITCODE -ne 0) {
     throw "cargo build failed for $targetTriple"
@@ -202,7 +203,7 @@ Remove-Item -Recurse -Force $identityRoot
 Remove-Item -Path "Cert:\CurrentUser\My\$($cert.Thumbprint)" -Force
 
 $artifactVersion = $ReleaseTag.TrimStart("v")
-$zip = Join-Path $repo "artifacts\LSENext-$artifactVersion-$Architecture.zip"
+$zip = Join-Path $repo "artifacts\LSENext-$artifactVersion-$Architecture-$Configuration.zip"
 New-Item -ItemType Directory -Force -Path (Split-Path $zip) | Out-Null
 if (Test-Path $zip) {
     Remove-Item -Force $zip
@@ -210,7 +211,7 @@ if (Test-Path $zip) {
 Compress-Archive -Path (Join-Path $dist "*") -DestinationPath $zip
 Write-Host "Created $zip"
 
-$msi = Join-Path $repo "artifacts\LSENext-$artifactVersion-$Architecture.msi"
+$msi = Join-Path $repo "artifacts\LSENext-$artifactVersion-$Architecture-$Configuration.msi"
 if (Test-Path $msi) {
     Remove-Item -Force $msi
 }
@@ -220,6 +221,7 @@ dotnet tool run wix build `
     -ext WixToolset.UI.wixext `
     -arch $Architecture `
     -d "SourceDir=$dist" `
+    -d "BuildConfiguration=$Configuration" `
     -out $msi
 if ($LASTEXITCODE -ne 0) {
     throw "wix build failed for $Architecture"

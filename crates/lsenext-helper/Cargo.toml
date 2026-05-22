@@ -14,6 +14,9 @@ windows-sys = { workspace = true, features = [
     "Win32_UI_WindowsAndMessaging",
 ] }
 
+[features]
+diagnostics = []
+
 [[bin]]
 name = "lsenext-helper"
 path = "src/main.rs"
