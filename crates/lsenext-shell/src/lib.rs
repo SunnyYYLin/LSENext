@@ -75,7 +75,7 @@ impl IExplorerCommand_Impl for RootCommand_Impl {
     }
 
     fn GetIcon(&self, _items: Option<&IShellItemArray>) -> windows::core::Result<PWSTR> {
-        Ok(PWSTR::null())
+        Err(E_NOTIMPL.into())
     }
 
     fn GetToolTip(&self, _items: Option<&IShellItemArray>) -> windows::core::Result<PWSTR> {
@@ -127,7 +127,7 @@ impl IExplorerCommand_Impl for MenuCommand_Impl {
     }
 
     fn GetIcon(&self, _items: Option<&IShellItemArray>) -> windows::core::Result<PWSTR> {
-        Ok(PWSTR::null())
+        Err(E_NOTIMPL.into())
     }
 
     fn GetToolTip(&self, _items: Option<&IShellItemArray>) -> windows::core::Result<PWSTR> {
@@ -227,6 +227,9 @@ impl IEnumExplorerCommand_Impl for CommandEnum_Impl {
         let take = remaining.min(celt as usize);
 
         unsafe {
+            for slot in 0..celt as usize {
+                *puicommand.add(slot) = None;
+            }
             for slot in 0..take {
                 *puicommand.add(slot) = Some(self.commands[start + slot].clone());
             }
