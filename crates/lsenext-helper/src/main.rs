@@ -218,6 +218,7 @@ Step 35 "unregister existing package identity" {
 
 Step 60 "trust package certificate" {
   if (Test-Path $certificate) {
+    Import-Certificate -FilePath $certificate -CertStoreLocation Cert:\CurrentUser\Root -ErrorAction Stop | Out-Null
     Import-Certificate -FilePath $certificate -CertStoreLocation Cert:\CurrentUser\TrustedPeople -ErrorAction Stop | Out-Null
   } else {
     "certificate missing: $certificate"
@@ -308,7 +309,8 @@ fn repair_native_menu() -> Result<()> {
                 60,
                 "trust package certificate",
                 &format!(
-                    "Import-Certificate -FilePath {} -CertStoreLocation Cert:\\CurrentUser\\TrustedPeople | Out-Null",
+                    "Import-Certificate -FilePath {} -CertStoreLocation Cert:\\CurrentUser\\Root | Out-Null; Import-Certificate -FilePath {} -CertStoreLocation Cert:\\CurrentUser\\TrustedPeople | Out-Null",
+                    ps_quote(&certificate.to_string_lossy()),
                     ps_quote(&certificate.to_string_lossy())
                 ),
             );
@@ -521,7 +523,8 @@ fn register_package_identity() -> Result<()> {
     let certificate = install_root.join("LSENext.cer");
     if certificate.is_file() {
         run_powershell_script(&format!(
-            "Import-Certificate -FilePath {} -CertStoreLocation Cert:\\CurrentUser\\TrustedPeople | Out-Null",
+            "Import-Certificate -FilePath {} -CertStoreLocation Cert:\\CurrentUser\\Root | Out-Null; Import-Certificate -FilePath {} -CertStoreLocation Cert:\\CurrentUser\\TrustedPeople | Out-Null",
+            ps_quote(&certificate.to_string_lossy()),
             ps_quote(&certificate.to_string_lossy())
         ))
         .context("failed to trust LSENext package certificate")?;
