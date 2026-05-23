@@ -8,6 +8,10 @@ LSENext is a modern **Windows 11 Explorer shell extension** — a **Link Shell E
 
 > Keywords: Link Shell Extension, Link Shell Extension Next, LSE, Windows 11 context menu, Explorer shell extension, symlink, junction, hardlink.
 
+## Demo
+
+![LSENext demo (zh-CN)](assets/zh_cn-demo.png)
+
 ## v0.1.0 Scope
 
 - Pick one or more link sources from Explorer.
