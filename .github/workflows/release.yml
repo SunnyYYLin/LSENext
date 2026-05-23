@@ -1,4 +1,4 @@
-name: Pre-release
+name: Release
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ permissions:
   contents: write
 
 jobs:
-  prerelease:
+  release:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -36,12 +36,12 @@ jobs:
         run: |
           dotnet tool restore
           ./scripts/package.ps1 -Architecture arm64 -Configuration release -ReleaseTag v0.1.0
-      - name: Create GitHub pre-release
+      - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v0.1.0
           name: LSENext v0.1.0
-          prerelease: true
+          prerelease: false
           files: |
             artifacts/*.msi
             artifacts/*.zip
