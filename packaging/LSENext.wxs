@@ -17,6 +17,7 @@
     <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
     <UI>
       <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="LaunchRegisterPackage" Condition="NOT Installed" Order="1" />
+      <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="LaunchUnregisterPackage" Condition="REMOVE=&quot;ALL&quot;" Order="2" />
     </UI>
 
     <StandardDirectory Id="ProgramFiles64Folder">
@@ -34,6 +35,9 @@
       </Component>
       <Component Id="RegisterExe" Guid="58BDBD4A-3D93-4FB9-8BBD-30EBBBE0B10C">
         <File Id="RegisterExeFile" Source="$(var.SourceDir)\lsenext-register.exe" KeyPath="yes" />
+      </Component>
+      <Component Id="UnregisterExe" Guid="58BDBD4A-3D93-4FB9-8BBD-30EBBBE0B10D">
+        <File Id="UnregisterExeFile" Source="$(var.SourceDir)\lsenext-unregister.exe" KeyPath="yes" />
       </Component>
       <Component Id="ShellDll" Guid="58BDBD4A-3D93-4FB9-8BBD-30EBBBE0B102">
         <File Id="ShellDllFile" Source="$(var.SourceDir)\lsenext-shell.dll" KeyPath="yes" />
@@ -91,6 +95,8 @@
   <Fragment>
     <Property Id="WixUnelevatedShellExecTarget" Value="[#RegisterExeFile]" />
     <CustomAction Id="LaunchRegisterPackage" BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORT)" DllEntry="WixUnelevatedShellExec" Execute="immediate" Return="ignore" />
+    <SetProperty Id="WixUnelevatedShellExecTarget" Value="[#UnregisterExeFile]" Before="LaunchUnregisterPackage" Sequence="ui" />
+    <CustomAction Id="LaunchUnregisterPackage" BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORT)" DllEntry="WixUnelevatedShellExec" Execute="immediate" Return="ignore" />
     <CustomAction Id="PrepareMachineRegistration" FileRef="HelperExeFile" ExeCommand="prepare-machine-registration" Execute="deferred" Impersonate="no" Return="check" />
     <CustomAction Id="UnregisterPackageIdentity" FileRef="HelperExeFile" ExeCommand="unregister-package" Execute="immediate" Return="ignore" />
     <InstallExecuteSequence>

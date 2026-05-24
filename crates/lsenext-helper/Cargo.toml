@@ -24,3 +24,7 @@ path = "src/main.rs"
 [[bin]]
 name = "lsenext-register"
 path = "src/main.rs"
+
+[[bin]]
+name = "lsenext-unregister"
+path = "src/main.rs"

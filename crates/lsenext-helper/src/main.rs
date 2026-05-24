@@ -30,9 +30,18 @@ fn main() {
 fn run() -> Result<()> {
     let mut args = env::args().skip(1);
     let command = args.next().unwrap_or_default();
-    if command.is_empty() && invoked_as_register_alias() {
-        register_package_identity()?;
-        return Ok(());
+    if command.is_empty() {
+        match invoked_alias_action() {
+            Some(AliasAction::Register) => {
+                register_package_identity()?;
+                return Ok(());
+            }
+            Some(AliasAction::Unregister) => {
+                unregister_package_identity()?;
+                return Ok(());
+            }
+            None => {}
+        }
     }
     match command.as_str() {
         "pick-source" => {
@@ -671,12 +680,20 @@ fn current_install_root() -> Result<PathBuf> {
         .context("failed to locate LSENext install directory")
 }
 
-fn invoked_as_register_alias() -> bool {
+enum AliasAction {
+    Register,
+    Unregister,
+}
+
+fn invoked_alias_action() -> Option<AliasAction> {
     env::current_exe()
         .ok()
         .and_then(|path| path.file_stem().map(|name| name.to_string_lossy().to_ascii_lowercase()))
-        .as_deref()
-        == Some("lsenext-register")
+        .and_then(|name| match name.as_str() {
+            "lsenext-register" => Some(AliasAction::Register),
+            "lsenext-unregister" => Some(AliasAction::Unregister),
+            _ => None,
+        })
 }
 
 fn run_powershell_script(script: &str) -> Result<()> {
