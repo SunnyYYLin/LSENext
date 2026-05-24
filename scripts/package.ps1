@@ -23,11 +23,14 @@ if ($LASTEXITCODE -ne 0) {
 
 New-Item -ItemType Directory -Force -Path $dist | Out-Null
 $helper = Join-Path $repo "target\$targetTriple\$profileDir\lsenext-helper.exe"
+$register = Join-Path $repo "target\$targetTriple\$profileDir\lsenext-register.exe"
 $shell = Join-Path $repo "target\$targetTriple\$profileDir\lsenext_shell.dll"
 if (-not (Test-Path $helper)) { throw "Missing build output: $helper" }
+if (-not (Test-Path $register)) { throw "Missing build output: $register" }
 if (-not (Test-Path $shell)) { throw "Missing build output: $shell" }
 
 Copy-Item -Force -Path $helper -Destination $dist
+Copy-Item -Force -Path $register -Destination $dist
 Copy-Item -Force -Path $shell -Destination (Join-Path $dist "lsenext-shell.dll")
 Copy-Item -Force -Recurse -Path (Join-Path $repo "resources") -Destination $dist
 Copy-Item -Force -Recurse -Path (Join-Path $repo "packaging") -Destination $dist
@@ -216,9 +219,11 @@ if (Test-Path $msi) {
     Remove-Item -Force $msi
 }
 dotnet tool run wix extension add WixToolset.UI.wixext/5.0.2 | Out-Null
+dotnet tool run wix extension add WixToolset.Util.wixext/5.0.2 | Out-Null
 dotnet tool run wix build `
     (Join-Path $repo "packaging\LSENext.wxs") `
     -ext WixToolset.UI.wixext `
+    -ext WixToolset.Util.wixext `
     -arch $Architecture `
     -d "SourceDir=$dist" `
     -d "BuildConfiguration=$Configuration" `

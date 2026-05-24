@@ -30,6 +30,10 @@ fn main() {
 fn run() -> Result<()> {
     let mut args = env::args().skip(1);
     let command = args.next().unwrap_or_default();
+    if command.is_empty() && invoked_as_register_alias() {
+        register_package_identity()?;
+        return Ok(());
+    }
     match command.as_str() {
         "pick-source" => {
             let paths = args.map(PathBuf::from).collect::<Vec<_>>();
@@ -665,6 +669,14 @@ fn current_install_root() -> Result<PathBuf> {
     exe.parent()
         .map(Path::to_path_buf)
         .context("failed to locate LSENext install directory")
+}
+
+fn invoked_as_register_alias() -> bool {
+    env::current_exe()
+        .ok()
+        .and_then(|path| path.file_stem().map(|name| name.to_string_lossy().to_ascii_lowercase()))
+        .as_deref()
+        == Some("lsenext-register")
 }
 
 fn run_powershell_script(script: &str) -> Result<()> {

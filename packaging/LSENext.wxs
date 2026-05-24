@@ -15,6 +15,9 @@
       <ComponentGroupRef Id="ProductComponents" />
     </Feature>
     <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
+    <UI>
+      <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="LaunchRegisterPackage" Order="1">NOT Installed</Publish>
+    </UI>
 
     <StandardDirectory Id="ProgramFiles64Folder">
       <Directory Id="INSTALLFOLDER" Name="LSENext">
@@ -28,6 +31,9 @@
     <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
       <Component Id="HelperExe" Guid="58BDBD4A-3D93-4FB9-8BBD-30EBBBE0B101">
         <File Id="HelperExeFile" Source="$(var.SourceDir)\lsenext-helper.exe" KeyPath="yes" />
+      </Component>
+      <Component Id="RegisterExe" Guid="58BDBD4A-3D93-4FB9-8BBD-30EBBBE0B10C">
+        <File Id="RegisterExeFile" Source="$(var.SourceDir)\lsenext-register.exe" KeyPath="yes" />
       </Component>
       <Component Id="ShellDll" Guid="58BDBD4A-3D93-4FB9-8BBD-30EBBBE0B102">
         <File Id="ShellDllFile" Source="$(var.SourceDir)\lsenext-shell.dll" KeyPath="yes" />
@@ -51,15 +57,6 @@
         <RemoveRegistryKey Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.BackgroundDropHardLink" Action="removeOnInstall" />
         <RemoveRegistryKey Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Explorer\CommandStore\shell\LSENext.ClearSource" Action="removeOnInstall" />
         <RegistryValue Root="HKLM" Key="Software\LSENext" Name="NativeContextMenu" Value="1" Type="integer" KeyPath="yes" />
-      </Component>
-      <Component Id="ActiveSetupRegistration" Guid="58BDBD4A-3D93-4FB9-8BBD-30EBBBE0B10B">
-        <RegistryKey Root="HKLM" Key="Software\Microsoft\Active Setup\Installed Components\LSENext.NativeMenu">
-          <RegistryValue Name="Version" Value="0,2,1,0" Type="string" />
-          <RegistryValue Name="StubPath" Value="&quot;[INSTALLFOLDER]lsenext-helper.exe&quot; register-package" Type="string" />
-          <RegistryValue Name="IsInstalled" Value="1" Type="integer" />
-          <RegistryValue Name="ComponentID" Value="LSENext.NativeMenu" Type="string" KeyPath="yes" />
-        </RegistryKey>
-        <RemoveRegistryKey Root="HKLM" Key="Software\Microsoft\Active Setup\Installed Components\LSENext.NativeMenu" Action="removeOnUninstall" />
       </Component>
       <Component Id="StartMenuShortcut" Guid="58BDBD4A-3D93-4FB9-8BBD-30EBBBE0B108">
         <Shortcut Id="StartMenuShortcut" Directory="ProgramMenuFolder" Name="LSENext" Target="[INSTALLFOLDER]lsenext-helper.exe" Arguments="about" WorkingDirectory="INSTALLFOLDER" Icon="LSENextIcon" />
@@ -92,6 +89,8 @@
   </Fragment>
 
   <Fragment>
+    <Property Id="WixUnelevatedShellExecTarget" Value="[#RegisterExeFile]" />
+    <CustomAction Id="LaunchRegisterPackage" BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORT)" DllEntry="WixUnelevatedShellExec" Execute="immediate" Return="ignore" />
     <CustomAction Id="PrepareMachineRegistration" FileRef="HelperExeFile" ExeCommand="prepare-machine-registration" Execute="deferred" Impersonate="no" Return="check" />
     <CustomAction Id="UnregisterPackageIdentity" FileRef="HelperExeFile" ExeCommand="unregister-package" Execute="immediate" Return="ignore" />
     <InstallExecuteSequence>
