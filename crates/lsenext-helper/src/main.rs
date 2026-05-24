@@ -66,6 +66,9 @@ fn run() -> Result<()> {
         "register-package" => {
             register_package_identity()?;
         }
+        "prepare-machine-registration" => {
+            prepare_machine_registration()?;
+        }
         "trust-package-certificate-machine" => {
             trust_package_certificate_machine()?;
         }
@@ -73,7 +76,7 @@ fn run() -> Result<()> {
             unregister_package_identity()?;
         }
         _ => {
-            bail!("usage: lsenext-helper <pick-source|drop-symlink|drop-junction|drop-hardlink|clear|about|register-package|trust-package-certificate-machine|unregister-package> [paths]");
+            bail!("usage: lsenext-helper <pick-source|drop-symlink|drop-junction|drop-hardlink|clear|about|register-package|prepare-machine-registration|trust-package-certificate-machine|unregister-package> [paths]");
         }
     }
     Ok(())
@@ -573,13 +576,11 @@ fn register_package_identity() -> Result<()> {
     let certificate = install_root.join("LSENext.cer");
     if certificate.is_file() {
         run_powershell_script(&format!(
-            "Import-Certificate -FilePath {} -CertStoreLocation Cert:\\CurrentUser\\Root | Out-Null; Import-Certificate -FilePath {} -CertStoreLocation Cert:\\CurrentUser\\TrustedPeople | Out-Null; Import-Certificate -FilePath {} -CertStoreLocation Cert:\\LocalMachine\\Root | Out-Null; Import-Certificate -FilePath {} -CertStoreLocation Cert:\\LocalMachine\\TrustedPeople | Out-Null",
+            "Import-Certificate -FilePath {} -CertStoreLocation Cert:\\CurrentUser\\Root | Out-Null; Import-Certificate -FilePath {} -CertStoreLocation Cert:\\CurrentUser\\TrustedPeople | Out-Null",
             ps_quote(&certificate.to_string_lossy()),
             ps_quote(&certificate.to_string_lossy()),
-            ps_quote(&certificate.to_string_lossy()),
-            ps_quote(&certificate.to_string_lossy())
         ))
-        .context("failed to trust LSENext package certificate")?;
+        .context("failed to trust LSENext package certificate for the current user")?;
     }
 
     run_powershell_script(&format!(
@@ -588,6 +589,11 @@ fn register_package_identity() -> Result<()> {
         ps_quote(&install_root.to_string_lossy())
     ))
     .context("failed to register LSENext package identity")
+}
+
+fn prepare_machine_registration() -> Result<()> {
+    cleanup_classic_context_menu().context("failed to clean classic Explorer menu registration")?;
+    trust_package_certificate_machine()
 }
 
 fn trust_package_certificate_machine() -> Result<()> {

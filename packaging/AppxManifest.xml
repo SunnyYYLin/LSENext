@@ -9,7 +9,7 @@
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
   xmlns:uap10="http://schemas.microsoft.com/appx/manifest/uap/windows10/10"
   IgnorableNamespaces="uap uap3 desktop4 desktop5 com rescap uap10">
-  <Identity Name="Sunnylin.LSENext" Publisher="CN=LSENext" Version="0.1.0.0" ProcessorArchitecture="neutral" />
+  <Identity Name="Sunnylin.LSENext" Publisher="CN=LSENext" Version="0.2.1.0" ProcessorArchitecture="neutral" />
   <Properties>
     <DisplayName>LSENext</DisplayName>
     <PublisherDisplayName>LSENext contributors</PublisherDisplayName>
