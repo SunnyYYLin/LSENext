@@ -12,6 +12,7 @@ const FOOTER_LEN: usize = 24;
 
 fn main() {
     if let Err(err) = run() {
+        let _ = write_bootstrapper_diagnostics(&err.to_string());
         show_error(&err.to_string());
         std::process::exit(1);
     }
@@ -170,6 +171,27 @@ fn show_error(message: &str) {
         .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command"])
         .arg(script.replace("{message}", &ps_quote(message)))
         .status();
+}
+
+fn write_bootstrapper_diagnostics(message: &str) -> Result<()> {
+    let local_app_data = env::var_os("LOCALAPPDATA").context("LOCALAPPDATA is not set")?;
+    let path = PathBuf::from(local_app_data)
+        .join("LSENext")
+        .join("diagnostics.txt");
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let mut text = String::new();
+    text.push_str("LSENext bootstrapper diagnostics\r\n");
+    text.push_str("================================\r\n");
+    text.push_str(&format!("version: {}\r\n", env!("CARGO_PKG_VERSION")));
+    text.push_str(&format!("process_arch: {}\r\n", env::consts::ARCH));
+    text.push_str(&format!("current_exe: {:?}\r\n", env::current_exe()));
+    text.push_str("\r\n[last_error]\r\n");
+    text.push_str(message);
+    text.push_str("\r\n");
+    fs::write(path, text)?;
+    Ok(())
 }
 
 fn ps_quote(value: &str) -> String {

@@ -3,13 +3,10 @@
 use anyhow::{bail, Context, Result};
 use lsenext_core::{clear_state, create_link, load_state, save_sources, LinkKind};
 use std::env;
-#[cfg(feature = "diagnostics")]
 use std::fs;
-#[cfg(feature = "diagnostics")]
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-#[cfg(feature = "diagnostics")]
 use std::process::Stdio;
 #[cfg(feature = "diagnostics")]
 use std::thread;
@@ -22,6 +19,7 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
 
 fn main() {
     if let Err(err) = run() {
+        let _ = write_error_diagnostics(&err.to_string());
         show_error(&err.to_string());
         std::process::exit(1);
     }
@@ -397,12 +395,29 @@ fn repair_native_menu() -> Result<()> {
     write_and_open_diagnostics(Some(&repair))
 }
 
-#[cfg(feature = "diagnostics")]
 fn diagnostics_path() -> Result<PathBuf> {
     let local_app_data = env::var_os("LOCALAPPDATA").context("LOCALAPPDATA is not set")?;
     Ok(PathBuf::from(local_app_data)
         .join("LSENext")
         .join("diagnostics.txt"))
+}
+
+fn write_error_diagnostics(message: &str) -> Result<()> {
+    let path = diagnostics_path()?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let mut text = String::new();
+    text.push_str("LSENext diagnostics\r\n");
+    text.push_str("===================\r\n");
+    text.push_str(&format!("version: {}\r\n", env!("CARGO_PKG_VERSION")));
+    text.push_str(&format!("process_arch: {}\r\n", env::consts::ARCH));
+    text.push_str(&format!("current_exe: {:?}\r\n", env::current_exe()));
+    text.push_str("\r\n[last_error]\r\n");
+    text.push_str(message);
+    text.push_str("\r\n");
+    fs::write(path, text)?;
+    Ok(())
 }
 
 #[cfg(feature = "diagnostics")]
@@ -697,11 +712,20 @@ fn invoked_alias_action() -> Option<AliasAction> {
 }
 
 fn run_powershell_script(script: &str) -> Result<()> {
-    let status = powershell_command(script)
-        .status()
+    let output = powershell_command(script)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
         .context("failed to start PowerShell")?;
-    if !status.success() {
-        bail!("PowerShell exited with {}", status);
+    let mut text = String::new();
+    text.push_str(&String::from_utf8_lossy(&output.stdout));
+    text.push_str(&String::from_utf8_lossy(&output.stderr));
+    if !output.status.success() {
+        let details = text.trim();
+        if details.is_empty() {
+            bail!("PowerShell exited with {}", output.status);
+        }
+        bail!("PowerShell exited with {}\n{}", output.status, details);
     }
     Ok(())
 }
