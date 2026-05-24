@@ -3,7 +3,6 @@ members = [
     "crates/lsenext-core",
     "crates/lsenext-helper",
     "crates/lsenext-shell",
-    "crates/lsenext-bootstrapper",
 ]
 resolver = "2"
 
