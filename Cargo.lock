@@ -15,8 +15,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 
 [[package]]
+name = "lsenext-bootstrapper"
+version = "0.2.2"
+dependencies = [
+ "anyhow",
+]
+
+[[package]]
 name = "lsenext-core"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "serde",
  "serde_json",
@@ -26,7 +33,7 @@ dependencies = [
 
 [[package]]
 name = "lsenext-helper"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "anyhow",
  "lsenext-core",
@@ -35,7 +42,7 @@ dependencies = [
 
 [[package]]
 name = "lsenext-shell"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "lsenext-core",
  "windows",

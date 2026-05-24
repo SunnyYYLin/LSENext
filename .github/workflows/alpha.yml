@@ -21,9 +21,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $version = "0.2.1"
+          $version = "0.2.2"
           $existing = (gh release list --limit 100 --json tagName | ConvertFrom-Json).tagName
-          $next = 3
+          $next = 1
           foreach ($tagName in $existing) {
             if ($tagName -match "^v$version-alpha\.(\d+)$") {
               $next = [Math]::Max($next, [int]$Matches[1] + 1)

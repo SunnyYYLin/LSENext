@@ -3,7 +3,7 @@ param(
     [string]$Architecture = "x64",
     [ValidateSet("debug", "release")]
     [string]$Configuration = "release",
-    [string]$ReleaseTag = "v0.2.1"
+    [string]$ReleaseTag = "v0.2.2"
 )
 
 $ErrorActionPreference = "Stop"
@@ -25,15 +25,18 @@ New-Item -ItemType Directory -Force -Path $dist | Out-Null
 $helper = Join-Path $repo "target\$targetTriple\$profileDir\lsenext-helper.exe"
 $register = Join-Path $repo "target\$targetTriple\$profileDir\lsenext-register.exe"
 $unregister = Join-Path $repo "target\$targetTriple\$profileDir\lsenext-unregister.exe"
+$bootstrapper = Join-Path $repo "target\$targetTriple\$profileDir\lsenext-bootstrapper.exe"
 $shell = Join-Path $repo "target\$targetTriple\$profileDir\lsenext_shell.dll"
 if (-not (Test-Path $helper)) { throw "Missing build output: $helper" }
 if (-not (Test-Path $register)) { throw "Missing build output: $register" }
 if (-not (Test-Path $unregister)) { throw "Missing build output: $unregister" }
+if (-not (Test-Path $bootstrapper)) { throw "Missing build output: $bootstrapper" }
 if (-not (Test-Path $shell)) { throw "Missing build output: $shell" }
 
 Copy-Item -Force -Path $helper -Destination $dist
 Copy-Item -Force -Path $register -Destination $dist
 Copy-Item -Force -Path $unregister -Destination $dist
+Copy-Item -Force -Path $bootstrapper -Destination $dist
 Copy-Item -Force -Path $shell -Destination (Join-Path $dist "lsenext-shell.dll")
 Copy-Item -Force -Recurse -Path (Join-Path $repo "resources") -Destination $dist
 Copy-Item -Force -Recurse -Path (Join-Path $repo "packaging") -Destination $dist
@@ -235,3 +238,20 @@ if ($LASTEXITCODE -ne 0) {
     throw "wix build failed for $Architecture"
 }
 Write-Host "Created $msi"
+
+$setupDir = Join-Path $repo "artifacts\LSENext-$artifactVersion-$Architecture-$Configuration-setup"
+if (Test-Path $setupDir) {
+    Remove-Item -Recurse -Force $setupDir
+}
+New-Item -ItemType Directory -Force -Path $setupDir | Out-Null
+$setupExeName = "LSENext-$artifactVersion-$Architecture-$Configuration-setup.exe"
+$setupMsiName = "LSENext-$Architecture.msi"
+Copy-Item -Force -Path $bootstrapper -Destination (Join-Path $setupDir $setupExeName)
+Copy-Item -Force -Path $msi -Destination (Join-Path $setupDir $setupMsiName)
+
+$setupZip = Join-Path $repo "artifacts\LSENext-$artifactVersion-$Architecture-$Configuration-setup.zip"
+if (Test-Path $setupZip) {
+    Remove-Item -Force $setupZip
+}
+Compress-Archive -Path (Join-Path $setupDir "*") -DestinationPath $setupZip
+Write-Host "Created $setupZip"

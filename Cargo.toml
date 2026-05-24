@@ -3,11 +3,12 @@ members = [
     "crates/lsenext-core",
     "crates/lsenext-helper",
     "crates/lsenext-shell",
+    "crates/lsenext-bootstrapper",
 ]
 resolver = "2"
 
 [workspace.package]
-version = "0.2.1"
+version = "0.2.2"
 edition = "2021"
 license = "MIT"
 authors = ["LSENext contributors"]

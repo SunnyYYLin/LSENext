@@ -12,7 +12,7 @@ LSENext is a modern **Windows 11 Explorer shell extension** — a **Link Shell E
 
 ![LSENext demo (zh-CN)](assets/zh_cn-demo.png)
 
-## v0.2.1 Scope
+## v0.2.2 Scope
 
 - Pick one or more link sources from Explorer.
 - Drop file/directory symbolic links into a target directory.
@@ -34,4 +34,4 @@ Packaging is done in GitHub Actions:
 - `.github/workflows/alpha.yml` for alpha pre-releases
 - `.github/workflows/release.yml` for manual pre-releases
 
-Artifacts are published from the workflow run and written to `artifacts\` during the job.
+Artifacts are published from the workflow run and written to `artifacts\` during the job. Use the `*-setup.zip` bundle as the recommended installer entry point; it contains a bootstrapper EXE that waits for MSI install and native-menu registration to finish before exiting.
