@@ -1,9 +1,14 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use anyhow::{bail, Context, Result};
+use std::fs;
+use std::io::{Read, Seek, SeekFrom};
 use std::env;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+
+const PAYLOAD_MAGIC: &[u8; 16] = b"LSENEXTPAYLOAD1!";
+const FOOTER_LEN: usize = 24;
 
 fn main() {
     if let Err(err) = run() {
@@ -14,32 +19,27 @@ fn main() {
 
 fn run() -> Result<()> {
     let exe = env::current_exe().context("failed to locate LSENext setup executable")?;
-    let setup_dir = exe
-        .parent()
-        .map(Path::to_path_buf)
-        .context("failed to locate LSENext setup directory")?;
-
     let architecture = parse_architecture_from_filename(&exe)?;
-    let msi = setup_dir.join(format!("LSENext-{architecture}.msi"));
-    if !msi.is_file() {
-        bail!("missing packaged MSI next to setup executable: {}", msi.display());
-    }
+    let install_root = default_install_root(&architecture)?;
+    let extracted = extract_payload(&exe)?;
 
-    let install_root = default_install_root(&architecture);
-    let status = Command::new("msiexec.exe")
-        .arg("/i")
-        .arg(&msi)
-        .arg(format!("INSTALLFOLDER={install_root}"))
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .context("failed to start Windows Installer")?;
-    if !status.success() {
-        bail!("Windows Installer exited with {}", status);
+    if install_root.exists() {
+        fs::remove_dir_all(&install_root).with_context(|| {
+            format!(
+                "failed to remove previous LSENext install at {}",
+                install_root.display()
+            )
+        })?;
     }
+    fs::create_dir_all(&install_root).with_context(|| {
+        format!(
+            "failed to create LSENext install directory {}",
+            install_root.display()
+        )
+    })?;
+    copy_tree(&extracted, &install_root)?;
 
-    let helper = PathBuf::from(&install_root).join("lsenext-helper.exe");
+    let helper = install_root.join("lsenext-helper.exe");
     if !helper.is_file() {
         bail!(
             "installation finished but helper was not found at {}",
@@ -58,6 +58,7 @@ fn run() -> Result<()> {
         bail!("LSENext native menu registration exited with {}", status);
     }
 
+    let _ = fs::remove_dir_all(&extracted);
     Ok(())
 }
 
@@ -75,9 +76,90 @@ fn parse_architecture_from_filename(path: &Path) -> Result<&'static str> {
     }
 }
 
-fn default_install_root(architecture: &str) -> String {
-    let program_files = env::var("ProgramFiles").unwrap_or_else(|_| String::from(r"C:\Program Files"));
-    format!(r"{program_files}\LSENext\{architecture}")
+fn default_install_root(architecture: &str) -> Result<PathBuf> {
+    let local_app_data = env::var_os("LOCALAPPDATA").context("LOCALAPPDATA is not set")?;
+    Ok(PathBuf::from(local_app_data)
+        .join("LSENext")
+        .join(architecture))
+}
+
+fn extract_payload(setup_exe: &Path) -> Result<PathBuf> {
+    let mut file = fs::File::open(setup_exe)
+        .with_context(|| format!("failed to open {}", setup_exe.display()))?;
+    let metadata = file.metadata()?;
+    if metadata.len() < FOOTER_LEN as u64 {
+        bail!("setup executable is missing its payload footer");
+    }
+
+    file.seek(SeekFrom::End(-(FOOTER_LEN as i64)))?;
+    let mut footer = [0u8; FOOTER_LEN];
+    file.read_exact(&mut footer)?;
+    if &footer[..16] != PAYLOAD_MAGIC {
+        bail!("setup executable payload marker is missing");
+    }
+    let payload_len = u64::from_le_bytes(
+        footer[16..24]
+            .try_into()
+            .context("invalid payload footer length")?,
+    );
+    if payload_len == 0 || payload_len > metadata.len() - FOOTER_LEN as u64 {
+        bail!("setup executable payload length is invalid");
+    }
+
+    let temp_root = env::temp_dir().join(format!("LSENextSetup-{}", std::process::id()));
+    if temp_root.exists() {
+        fs::remove_dir_all(&temp_root).ok();
+    }
+    fs::create_dir_all(&temp_root)?;
+
+    let payload_zip = temp_root.join("payload.zip");
+    file.seek(SeekFrom::End(-((FOOTER_LEN as u64 + payload_len) as i64)))?;
+    let mut payload = vec![0u8; payload_len as usize];
+    file.read_exact(&mut payload)?;
+    fs::write(&payload_zip, payload)?;
+
+    let expanded = temp_root.join("expanded");
+    fs::create_dir_all(&expanded)?;
+    let status = Command::new("powershell.exe")
+        .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command"])
+        .arg(format!(
+            "Expand-Archive -LiteralPath {} -DestinationPath {} -Force",
+            ps_quote(&payload_zip.to_string_lossy()),
+            ps_quote(&expanded.to_string_lossy())
+        ))
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .context("failed to extract embedded payload archive")?;
+    if !status.success() {
+        bail!("embedded payload extraction exited with {}", status);
+    }
+    Ok(expanded)
+}
+
+fn copy_tree(source: &Path, destination: &Path) -> Result<()> {
+    for entry in fs::read_dir(source)
+        .with_context(|| format!("failed to enumerate {}", source.display()))?
+    {
+        let entry = entry?;
+        let source_path = entry.path();
+        let destination_path = destination.join(entry.file_name());
+        let file_type = entry.file_type()?;
+        if file_type.is_dir() {
+            fs::create_dir_all(&destination_path)?;
+            copy_tree(&source_path, &destination_path)?;
+        } else {
+            fs::copy(&source_path, &destination_path).with_context(|| {
+                format!(
+                    "failed to copy {} to {}",
+                    source_path.display(),
+                    destination_path.display()
+                )
+            })?;
+        }
+    }
+    Ok(())
 }
 
 fn show_error(message: &str) {

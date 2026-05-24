@@ -34,4 +34,4 @@ Packaging is done in GitHub Actions:
 - `.github/workflows/alpha.yml` for alpha pre-releases
 - `.github/workflows/release.yml` for manual pre-releases
 
-Artifacts are published from the workflow run and written to `artifacts\` during the job. Use the `*-setup.zip` bundle as the recommended installer entry point; it contains a bootstrapper EXE that waits for MSI install and native-menu registration to finish before exiting.
+Artifacts are published from the workflow run and written to `artifacts\` during the job. Use the `*-setup.zip` bundle as the recommended installer entry point; it contains a self-extracting setup EXE that copies the packaged files into place and waits for native-menu registration to finish before exiting.

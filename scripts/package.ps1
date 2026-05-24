@@ -245,9 +245,27 @@ if (Test-Path $setupDir) {
 }
 New-Item -ItemType Directory -Force -Path $setupDir | Out-Null
 $setupExeName = "LSENext-$artifactVersion-$Architecture-$Configuration-setup.exe"
-$setupMsiName = "LSENext-$Architecture.msi"
-Copy-Item -Force -Path $bootstrapper -Destination (Join-Path $setupDir $setupExeName)
-Copy-Item -Force -Path $msi -Destination (Join-Path $setupDir $setupMsiName)
+$setupPayload = Join-Path $setupDir "payload.zip"
+if (Test-Path $setupPayload) {
+    Remove-Item -Force $setupPayload
+}
+Compress-Archive -Path (Join-Path $dist "*") -DestinationPath $setupPayload
+
+$setupExe = Join-Path $setupDir $setupExeName
+Copy-Item -Force -Path $bootstrapper -Destination $setupExe
+$footerMagic = [System.Text.Encoding]::ASCII.GetBytes("LSENEXTPAYLOAD1!")
+$payloadBytes = [System.IO.File]::ReadAllBytes($setupPayload)
+$footer = New-Object byte[] 24
+[Array]::Copy($footerMagic, 0, $footer, 0, 16)
+[BitConverter]::GetBytes([UInt64]$payloadBytes.Length).CopyTo($footer, 16)
+$stream = [System.IO.File]::Open($setupExe, [System.IO.FileMode]::Append, [System.IO.FileAccess]::Write, [System.IO.FileShare]::Read)
+try {
+    $stream.Write($payloadBytes, 0, $payloadBytes.Length)
+    $stream.Write($footer, 0, $footer.Length)
+} finally {
+    $stream.Dispose()
+}
+Remove-Item -Force $setupPayload
 
 $setupZip = Join-Path $repo "artifacts\LSENext-$artifactVersion-$Architecture-$Configuration-setup.zip"
 if (Test-Path $setupZip) {
