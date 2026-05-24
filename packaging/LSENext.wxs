@@ -16,7 +16,7 @@
     </Feature>
     <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
     <UI>
-      <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="LaunchRegisterPackage" Order="1">NOT Installed</Publish>
+      <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="LaunchRegisterPackage" Condition="NOT Installed" Order="1" />
     </UI>
 
     <StandardDirectory Id="ProgramFiles64Folder">
