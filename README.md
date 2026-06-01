@@ -12,7 +12,7 @@ LSENext is a modern **Windows 11 Explorer shell extension** — a **Link Shell E
 
 ![LSENext demo (zh-CN)](assets/zh_cn-demo.png)
 
-## v0.2.2 Scope
+## v0.2.3 Scope
 
 - Pick one or more link sources from Explorer.
 - Drop file/directory symbolic links into a target directory.

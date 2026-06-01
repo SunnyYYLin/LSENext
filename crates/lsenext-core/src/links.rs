@@ -6,6 +6,7 @@ use thiserror::Error;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LinkKind {
     Symbolic,
+    RelativeSymbolic,
     Junction,
     HardLink,
 }
@@ -29,6 +30,8 @@ pub enum LinkError {
         #[source]
         error: std::io::Error,
     },
+    #[error("cannot create relative link across different drives: from {0} to {1}")]
+    RelativePathFailed(PathBuf, PathBuf),
 }
 
 pub fn destination_for(target_dir: &Path, source: &Path) -> Result<PathBuf, LinkError> {
@@ -54,9 +57,24 @@ pub fn create_link(
         return Err(LinkError::MissingTargetDirectory(target_dir.to_path_buf()));
     }
 
-    let destination = destination_for(target_dir, &source.path)?;
+    let mut destination = destination_for(target_dir, &source.path)?;
     if fs::symlink_metadata(&destination).is_ok() {
-        return Err(LinkError::DestinationExists(destination));
+        let name = source.path.file_name().unwrap();
+        let stem = source.path.file_stem().unwrap_or(name).to_string_lossy();
+        let ext = source.path.extension().map(|e| e.to_string_lossy().into_owned());
+        
+        let mut counter = 1;
+        loop {
+            let new_name = match &ext {
+                Some(e) => format!("{} ({}).{}", stem, counter, e),
+                None => format!("{} ({})", stem, counter),
+            };
+            destination = target_dir.join(new_name);
+            if fs::symlink_metadata(&destination).is_err() {
+                break;
+            }
+            counter += 1;
+        }
     }
 
     create_platform_link(kind, source, &destination)?;
@@ -69,12 +87,21 @@ fn create_platform_link(
     source: &PickedSource,
     destination: &Path,
 ) -> Result<(), LinkError> {
+    let source_path = match kind {
+        LinkKind::RelativeSymbolic => {
+            let target_dir = destination.parent().unwrap_or_else(|| Path::new(""));
+            pathdiff::diff_paths(&source.path, target_dir)
+                .ok_or_else(|| LinkError::RelativePathFailed(source.path.clone(), target_dir.to_path_buf()))?
+        }
+        _ => source.path.clone(),
+    };
+
     match kind {
-        LinkKind::Symbolic => {
+        LinkKind::Symbolic | LinkKind::RelativeSymbolic => {
             let result = if source.is_dir {
-                std::os::windows::fs::symlink_dir(&source.path, destination)
+                std::os::windows::fs::symlink_dir(&source_path, destination)
             } else {
-                std::os::windows::fs::symlink_file(&source.path, destination)
+                std::os::windows::fs::symlink_file(&source_path, destination)
             };
             result.map_err(|error| LinkError::CreateFailed {
                 source: source.path.clone(),

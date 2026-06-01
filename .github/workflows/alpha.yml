@@ -21,7 +21,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $version = "0.2.2"
+          $version = "0.2.3"
           $existing = (gh release list --limit 100 --json tagName | ConvertFrom-Json).tagName
           $next = 3
           foreach ($tagName in $existing) {

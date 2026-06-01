@@ -55,6 +55,7 @@ fn run() -> Result<()> {
             save_sources(&paths)?;
         }
         "drop-symlink" => drop_links(LinkKind::Symbolic, args.next())?,
+        "drop-relative-symlink" => drop_links(LinkKind::RelativeSymbolic, args.next())?,
         "drop-junction" => drop_links(LinkKind::Junction, args.next())?,
         "drop-hardlink" => drop_links(LinkKind::HardLink, args.next())?,
         "clear" => {
@@ -92,7 +93,7 @@ fn run() -> Result<()> {
             unregister_package_identity()?;
         }
         _ => {
-            bail!("usage: lsenext-helper <pick-source|drop-symlink|drop-junction|drop-hardlink|clear|about|register-package|prepare-machine-registration|trust-package-certificate-machine|unregister-package> [paths]");
+            bail!("usage: lsenext-helper <pick-source|drop-symlink|drop-relative-symlink|drop-junction|drop-hardlink|clear|about|register-package|prepare-machine-registration|trust-package-certificate-machine|unregister-package> [paths]");
         }
     }
     Ok(())
@@ -134,6 +135,7 @@ fn run_elevated(kind: LinkKind, target: &Path) -> Result<()> {
     let exe = env::current_exe().context("failed to locate LSENext helper")?;
     let command = match kind {
         LinkKind::Symbolic => "drop-symlink",
+        LinkKind::RelativeSymbolic => "drop-relative-symlink",
         LinkKind::Junction => "drop-junction",
         LinkKind::HardLink => "drop-hardlink",
     };
@@ -162,7 +164,7 @@ fn run_elevated(kind: LinkKind, target: &Path) -> Result<()> {
 }
 
 fn show_about() {
-    show_info("LSENext 0.1.0\nQuick symbolic, hard link, and directory junction creation.");
+    show_info("LSENext 0.2.3\nQuick symbolic, hard link, and directory junction creation.");
 }
 
 #[cfg(feature = "diagnostics")]

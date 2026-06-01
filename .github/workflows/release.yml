@@ -20,27 +20,27 @@ jobs:
         shell: pwsh
         run: |
           dotnet tool restore
-          ./scripts/package.ps1 -Architecture x64 -Configuration debug -ReleaseTag v0.2.2
+          ./scripts/package.ps1 -Architecture x64 -Configuration debug -ReleaseTag v0.2.3
       - name: Package x64 release
         shell: pwsh
         run: |
           dotnet tool restore
-          ./scripts/package.ps1 -Architecture x64 -Configuration release -ReleaseTag v0.2.2
+          ./scripts/package.ps1 -Architecture x64 -Configuration release -ReleaseTag v0.2.3
       - name: Package arm64 debug
         shell: pwsh
         run: |
           dotnet tool restore
-          ./scripts/package.ps1 -Architecture arm64 -Configuration debug -ReleaseTag v0.2.2
+          ./scripts/package.ps1 -Architecture arm64 -Configuration debug -ReleaseTag v0.2.3
       - name: Package arm64 release
         shell: pwsh
         run: |
           dotnet tool restore
-          ./scripts/package.ps1 -Architecture arm64 -Configuration release -ReleaseTag v0.2.2
+          ./scripts/package.ps1 -Architecture arm64 -Configuration release -ReleaseTag v0.2.3
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v0.2.2
-          name: LSENext v0.2.2
+          tag_name: v0.2.3
+          name: LSENext v0.2.3
           prerelease: false
           files: |
             artifacts/*.msi

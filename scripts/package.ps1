@@ -3,7 +3,7 @@ param(
     [string]$Architecture = "x64",
     [ValidateSet("debug", "release")]
     [string]$Configuration = "release",
-    [string]$ReleaseTag = "v0.2.2"
+    [string]$ReleaseTag = "v0.2.3"
 )
 
 $ErrorActionPreference = "Stop"

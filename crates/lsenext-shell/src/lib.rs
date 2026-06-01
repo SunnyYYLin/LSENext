@@ -26,6 +26,8 @@ pub const CLSID_LSENEXT_FILE_ROOT: GUID = GUID::from_u128(0x32ad61d5_1919_4582_9
 pub const CLSID_LSENEXT_PICK_SOURCE: GUID = GUID::from_u128(0x32ad61d5_1919_4582_95dc_d9eb0bb6e001);
 pub const CLSID_LSENEXT_DROP_SYMLINK: GUID =
     GUID::from_u128(0x32ad61d5_1919_4582_95dc_d9eb0bb6e002);
+pub const CLSID_LSENEXT_DROP_RELATIVE_SYMLINK: GUID =
+    GUID::from_u128(0x32ad61d5_1919_4582_95dc_d9eb0bb6e009);
 pub const CLSID_LSENEXT_DROP_JUNCTION: GUID =
     GUID::from_u128(0x32ad61d5_1919_4582_95dc_d9eb0bb6e003);
 pub const CLSID_LSENEXT_CLEAR_SOURCE: GUID =
@@ -51,6 +53,7 @@ enum RootKind {
 enum CommandKind {
     PickSource,
     DropSymbolic,
+    DropRelativeSymbolic,
     DropJunction,
     DropHardLink,
     ClearSource,
@@ -127,6 +130,7 @@ impl IExplorerCommand_Impl for MenuCommand_Impl {
         alloc_pwstr(match self.kind {
             CommandKind::PickSource => "Pick Link Source",
             CommandKind::DropSymbolic => "Drop Symbolic Link",
+            CommandKind::DropRelativeSymbolic => "Drop Relative Symbolic Link",
             CommandKind::DropJunction => "Drop Directory Junction",
             CommandKind::DropHardLink => "Drop Hard Link",
             CommandKind::ClearSource => "Clear Link Source",
@@ -149,6 +153,7 @@ impl IExplorerCommand_Impl for MenuCommand_Impl {
         Ok(match self.kind {
             CommandKind::PickSource => CLSID_LSENEXT_PICK_SOURCE,
             CommandKind::DropSymbolic => CLSID_LSENEXT_DROP_SYMLINK,
+            CommandKind::DropRelativeSymbolic => CLSID_LSENEXT_DROP_RELATIVE_SYMLINK,
             CommandKind::DropJunction => CLSID_LSENEXT_DROP_JUNCTION,
             CommandKind::DropHardLink => CLSID_LSENEXT_DROP_HARDLINK,
             CommandKind::ClearSource => CLSID_LSENEXT_CLEAR_SOURCE,
@@ -166,7 +171,7 @@ impl IExplorerCommand_Impl for MenuCommand_Impl {
             CommandKind::PickSource => ECS_ENABLED.0,
             #[cfg(feature = "diagnostics")]
             CommandKind::Diagnostics => ECS_ENABLED.0,
-            CommandKind::DropSymbolic | CommandKind::ClearSource => {
+            CommandKind::DropSymbolic | CommandKind::DropRelativeSymbolic | CommandKind::ClearSource => {
                 if load_state().ok().flatten().is_some() {
                     ECS_ENABLED.0
                 } else {
@@ -215,6 +220,7 @@ impl IExplorerCommand_Impl for MenuCommand_Impl {
                         .map_err(|err| err.to_string())
                 }),
             CommandKind::DropSymbolic => drop_links(items, LinkKind::Symbolic),
+            CommandKind::DropRelativeSymbolic => drop_links(items, LinkKind::RelativeSymbolic),
             CommandKind::DropJunction => drop_links(items, LinkKind::Junction),
             CommandKind::DropHardLink => drop_links(items, LinkKind::HardLink),
             CommandKind::ClearSource => clear_state().map(|_| ()).map_err(|err| err.to_string()),
@@ -385,6 +391,7 @@ pub extern "system" fn DllGetClassObject(
             CLSID_LSENEXT_BACKGROUND_ROOT => FactoryKind::Root(RootKind::Background),
             CLSID_LSENEXT_PICK_SOURCE => FactoryKind::Menu(CommandKind::PickSource),
             CLSID_LSENEXT_DROP_SYMLINK => FactoryKind::Menu(CommandKind::DropSymbolic),
+            CLSID_LSENEXT_DROP_RELATIVE_SYMLINK => FactoryKind::Menu(CommandKind::DropRelativeSymbolic),
             CLSID_LSENEXT_DROP_JUNCTION => FactoryKind::Menu(CommandKind::DropJunction),
             CLSID_LSENEXT_DROP_HARDLINK => FactoryKind::Menu(CommandKind::DropHardLink),
             CLSID_LSENEXT_CLEAR_SOURCE => FactoryKind::Menu(CommandKind::ClearSource),
@@ -410,7 +417,7 @@ pub extern "system" fn DllUnregisterServer() -> HRESULT {
 
 #[no_mangle]
 pub extern "system" fn LSENextVersion() -> PCSTR {
-    PCSTR(c"LSENext 0.1.0".as_ptr() as _)
+    PCSTR(c"LSENext 0.2.3".as_ptr() as _)
 }
 
 fn enumerate_commands(root_kind: RootKind) -> windows::core::Result<IEnumExplorerCommand> {
@@ -438,6 +445,7 @@ fn menu_command_kinds(root_kind: RootKind, state: Option<SelectionState>) -> Vec
     }
     if let Some(state) = state {
         commands.push(CommandKind::DropSymbolic);
+        commands.push(CommandKind::DropRelativeSymbolic);
         if state.sources.iter().all(|source| source.is_dir) {
             commands.push(CommandKind::DropJunction);
         }
@@ -526,6 +534,7 @@ fn run_elevated_helper(kind: LinkKind, target: &Path) -> Result<(), String> {
     }
     let command = match kind {
         LinkKind::Symbolic => "drop-symlink",
+        LinkKind::RelativeSymbolic => "drop-relative-symlink",
         LinkKind::Junction => "drop-junction",
         LinkKind::HardLink => "drop-hardlink",
     };
@@ -626,6 +635,7 @@ mod tests {
             with_diagnostics(vec![
                 CommandKind::PickSource,
                 CommandKind::DropSymbolic,
+                CommandKind::DropRelativeSymbolic,
                 CommandKind::DropHardLink,
                 CommandKind::ClearSource,
             ])
@@ -646,6 +656,7 @@ mod tests {
             with_diagnostics(vec![
                 CommandKind::PickSource,
                 CommandKind::DropSymbolic,
+                CommandKind::DropRelativeSymbolic,
                 CommandKind::DropJunction,
                 CommandKind::ClearSource,
             ])
@@ -688,6 +699,7 @@ mod tests {
             menu_command_kinds(RootKind::Background, Some(state)),
             with_diagnostics(vec![
                 CommandKind::DropSymbolic,
+                CommandKind::DropRelativeSymbolic,
                 CommandKind::DropJunction,
                 CommandKind::ClearSource,
             ])
@@ -707,6 +719,7 @@ mod tests {
             menu_command_kinds(RootKind::Background, Some(state)),
             with_diagnostics(vec![
                 CommandKind::DropSymbolic,
+                CommandKind::DropRelativeSymbolic,
                 CommandKind::DropHardLink,
                 CommandKind::ClearSource,
             ])
@@ -733,6 +746,7 @@ mod tests {
             with_diagnostics(vec![
                 CommandKind::PickSource,
                 CommandKind::DropSymbolic,
+                CommandKind::DropRelativeSymbolic,
                 CommandKind::ClearSource,
             ])
         );
