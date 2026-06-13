@@ -22,6 +22,30 @@ This repository is LSENext, a Windows 11-oriented Link Shell Extension successor
 - Use `cargo test --workspace` for validation unless a narrower test is enough.
 - For packaging, use GitHub Actions workflows instead of local packaging.
 
+## Release workflow
+
+### Alpha pre-release (automatic)
+
+- Push to `main` triggers `.github/workflows/alpha.yml`.
+- Alpha tag is computed as `v<version>-alpha.<next>` where `<version>` is the `$version` variable in `alpha.yml`.
+- After publishing a stable release, bump `$version` in `alpha.yml` to the next minor/patch version.
+
+### Stable release
+
+1. Bump `version` in workspace `Cargo.toml` and all version strings (`lsenext-shell/src/lib.rs`, `lsenext-helper/src/main.rs`).
+2. Update `$version` in `.github/workflows/alpha.yml` to the next development version.
+3. Commit and push to `main`.
+4. Create and push a tag: `git tag vX.Y.Z && git push origin vX.Y.Z`.
+5. `.github/workflows/release.yml` triggers automatically: builds, deletes all pre-releases, and creates the stable release.
+
+### Version bump checklist
+
+- `Cargo.toml` → `workspace.package.version`
+- `.github/workflows/alpha.yml` → `$version` (next dev version)
+- `.github/workflows/release.yml` → uses `${{ github.ref_name }}` dynamically (no change needed)
+- `crates/lsenext-shell/src/lib.rs` → `LSENextVersion()` string
+- `crates/lsenext-helper/src/main.rs` → `show_about()` string
+
 ## Build targets
 
 - Windows x64: `x86_64-pc-windows-msvc`
