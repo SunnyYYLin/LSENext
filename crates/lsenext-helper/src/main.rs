@@ -240,7 +240,7 @@ fn run_elevated_create_links(kind: LinkKind, target: &Path, sources: &[PathBuf])
 }
 
 fn show_about() {
-    show_info("LSENext 0.2.4\nQuick symbolic, hard link, and directory junction creation.");
+    show_info("LSENext 0.2.5\nQuick symbolic, hard link, and directory junction creation.");
 }
 
 #[cfg(feature = "diagnostics")]
