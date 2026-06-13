@@ -1,7 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use anyhow::{bail, Context, Result};
-use lsenext_core::{clear_state, create_link, load_state, save_sources, LinkKind};
+use lsenext_core::{clear_state, create_link, load_state, save_sources, LinkKind, PickedSource};
 use std::env;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -58,6 +58,25 @@ fn run() -> Result<()> {
         "drop-relative-symlink" => drop_links(LinkKind::RelativeSymbolic, args.next())?,
         "drop-junction" => drop_links(LinkKind::Junction, args.next())?,
         "drop-hardlink" => drop_links(LinkKind::HardLink, args.next())?,
+        "create-links" => {
+            let kind_str = args.next().context("link kind argument is required")?;
+            let target = args
+                .next()
+                .map(PathBuf::from)
+                .context("target directory argument is required")?;
+            let sources: Vec<PathBuf> = args.map(PathBuf::from).collect();
+            if sources.is_empty() {
+                bail!("at least one source path is required");
+            }
+            let kind = match kind_str.as_str() {
+                "symbolic" => LinkKind::Symbolic,
+                "relative-symbolic" => LinkKind::RelativeSymbolic,
+                "junction" => LinkKind::Junction,
+                "hardlink" => LinkKind::HardLink,
+                _ => bail!("unknown link kind: {}", kind_str),
+            };
+            create_links(kind, &target, &sources)?;
+        }
         "clear" => {
             clear_state()?;
         }
@@ -93,7 +112,7 @@ fn run() -> Result<()> {
             unregister_package_identity()?;
         }
         _ => {
-            bail!("usage: lsenext-helper <pick-source|drop-symlink|drop-relative-symlink|drop-junction|drop-hardlink|clear|about|register-package|prepare-machine-registration|trust-package-certificate-machine|unregister-package> [paths]");
+            bail!("usage: lsenext-helper <pick-source|drop-symlink|drop-relative-symlink|drop-junction|drop-hardlink|create-links|clear|about|register-package|prepare-machine-registration|trust-package-certificate-machine|unregister-package> [paths]");
         }
     }
     Ok(())
@@ -114,6 +133,29 @@ fn drop_links(kind: LinkKind, target: Option<String>) -> Result<()> {
         if let Err(err) = create_link(kind, source, &target) {
             if should_retry_elevated(&err) {
                 run_elevated(kind, &target)?;
+                return Ok(());
+            }
+            return Err(err.into());
+        }
+    }
+    Ok(())
+}
+
+fn create_links(kind: LinkKind, target: &Path, sources: &[PathBuf]) -> Result<()> {
+    if kind == LinkKind::Junction && sources.iter().any(|s| !s.is_dir()) {
+        bail!("Directory junctions can only be created from directory sources.");
+    }
+    if kind == LinkKind::HardLink && sources.iter().any(|s| s.is_dir()) {
+        bail!("Hard links can only be created from file sources.");
+    }
+    for source_path in sources {
+        let source = PickedSource {
+            path: source_path.clone(),
+            is_dir: source_path.is_dir(),
+        };
+        if let Err(err) = create_link(kind, &source, target) {
+            if should_retry_elevated(&err) {
+                run_elevated_create_links(kind, target, sources)?;
                 return Ok(());
             }
             return Err(err.into());
@@ -144,6 +186,40 @@ fn run_elevated(kind: LinkKind, target: &Path) -> Result<()> {
     let file = wide_null(&exe.to_string_lossy());
     let args = wide_null(&params);
 
+    let result = unsafe {
+        ShellExecuteW(
+            std::ptr::null_mut(),
+            verb.as_ptr(),
+            file.as_ptr(),
+            args.as_ptr(),
+            std::ptr::null(),
+            SW_SHOWNORMAL as i32,
+        )
+    };
+    if result as isize <= 32 {
+        bail!(
+            "failed to start elevated helper, ShellExecuteW returned {}",
+            result as isize
+        );
+    }
+    Ok(())
+}
+
+fn run_elevated_create_links(kind: LinkKind, target: &Path, sources: &[PathBuf]) -> Result<()> {
+    let exe = env::current_exe().context("failed to locate LSENext helper")?;
+    let kind_str = match kind {
+        LinkKind::Symbolic => "symbolic",
+        LinkKind::RelativeSymbolic => "relative-symbolic",
+        LinkKind::Junction => "junction",
+        LinkKind::HardLink => "hardlink",
+    };
+    let mut params = format!("create-links {} \"{}\"", kind_str, target.display());
+    for source in sources {
+        params.push_str(&format!(" \"{}\"", source.display()));
+    }
+    let verb = wide_null("runas");
+    let file = wide_null(&exe.to_string_lossy());
+    let args = wide_null(&params);
     let result = unsafe {
         ShellExecuteW(
             std::ptr::null_mut(),
