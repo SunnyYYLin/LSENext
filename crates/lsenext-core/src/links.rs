@@ -11,6 +11,72 @@ pub enum LinkKind {
     HardLink,
 }
 
+impl LinkKind {
+    pub const fn cli_name(&self) -> &'static str {
+        match self {
+            Self::Symbolic => "symbolic",
+            Self::RelativeSymbolic => "relative-symbolic",
+            Self::Junction => "junction",
+            Self::HardLink => "hardlink",
+        }
+    }
+
+    pub fn from_cli_name(name: &str) -> Option<Self> {
+        match name {
+            "symbolic" => Some(Self::Symbolic),
+            "relative-symbolic" => Some(Self::RelativeSymbolic),
+            "junction" => Some(Self::Junction),
+            "hardlink" => Some(Self::HardLink),
+            _ => None,
+        }
+    }
+
+    pub const fn drop_subcommand(&self) -> &'static str {
+        match self {
+            Self::Symbolic => "drop-symlink",
+            Self::RelativeSymbolic => "drop-relative-symlink",
+            Self::Junction => "drop-junction",
+            Self::HardLink => "drop-hardlink",
+        }
+    }
+
+    pub fn from_drop_subcommand(name: &str) -> Option<Self> {
+        match name {
+            "drop-symlink" => Some(Self::Symbolic),
+            "drop-relative-symlink" => Some(Self::RelativeSymbolic),
+            "drop-junction" => Some(Self::Junction),
+            "drop-hardlink" => Some(Self::HardLink),
+            _ => None,
+        }
+    }
+
+    pub const fn drop_title(&self) -> &'static str {
+        match self {
+            Self::Symbolic => "Drop Symbolic Link",
+            Self::RelativeSymbolic => "Drop Relative Symbolic Link",
+            Self::Junction => "Drop Directory Junction",
+            Self::HardLink => "Drop Hard Link",
+        }
+    }
+
+    pub const fn create_title(&self) -> &'static str {
+        match self {
+            Self::Symbolic => "Create Symbolic Links...",
+            Self::RelativeSymbolic => "Create Relative Symbolic Links...",
+            Self::Junction => "Create Directory Junctions...",
+            Self::HardLink => "Create Hard Links...",
+        }
+    }
+
+    pub fn supports_sources(&self, sources: &[PickedSource]) -> bool {
+        match self {
+            Self::Symbolic | Self::RelativeSymbolic => true,
+            Self::Junction => !sources.is_empty() && sources.iter().all(|s| s.is_dir),
+            Self::HardLink => !sources.is_empty() && sources.iter().all(|s| !s.is_dir),
+        }
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum LinkError {
     #[error("junctions can only target directories: {0}")]
@@ -34,9 +100,80 @@ pub enum LinkError {
     RelativePathFailed(PathBuf, PathBuf),
 }
 
+pub fn is_elevation_required(error: &LinkError) -> bool {
+    match error {
+        LinkError::CreateFailed { error, .. } => {
+            matches!(error.raw_os_error(), Some(5) | Some(1314))
+        }
+        _ => false,
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum BatchLinkError {
+    #[error("selected link kind does not support the given sources")]
+    UnsupportedSources,
+    #[error("no source paths were provided")]
+    EmptySources,
+    #[error("link operation failed: {error}")]
+    Failed {
+        error: LinkError,
+        remaining_sources: Vec<PathBuf>,
+    },
+}
+
+impl BatchLinkError {
+    pub fn is_elevation_required(&self) -> bool {
+        match self {
+            Self::Failed { error, .. } => is_elevation_required(error),
+            _ => false,
+        }
+    }
+}
+
+pub fn execute_batch(
+    kind: LinkKind,
+    target_dir: &Path,
+    sources: &[PickedSource],
+) -> Result<(), BatchLinkError> {
+    if sources.is_empty() {
+        return Err(BatchLinkError::EmptySources);
+    }
+    if !kind.supports_sources(sources) {
+        return Err(BatchLinkError::UnsupportedSources);
+    }
+    for (index, source) in sources.iter().enumerate() {
+        if let Err(err) = create_link(kind, source, target_dir) {
+            let remaining = sources[index..].iter().map(|s| s.path.clone()).collect();
+            return Err(BatchLinkError::Failed {
+                error: err,
+                remaining_sources: remaining,
+            });
+        }
+    }
+    Ok(())
+}
+
+fn source_file_name(source: &Path) -> Option<&std::ffi::OsStr> {
+    #[cfg(windows)]
+    {
+        source.file_name()
+    }
+    #[cfg(not(windows))]
+    {
+        source.file_name().and_then(|name| {
+            if let Some(s) = name.to_str() {
+                if let Some(pos) = s.rfind('\\') {
+                    return Some(std::ffi::OsStr::new(&s[pos + 1..]));
+                }
+            }
+            Some(name)
+        })
+    }
+}
+
 pub fn destination_for(target_dir: &Path, source: &Path) -> Result<PathBuf, LinkError> {
-    let name = source
-        .file_name()
+    let name = source_file_name(source)
         .ok_or_else(|| LinkError::MissingFileName(source.to_path_buf()))?;
     Ok(target_dir.join(name))
 }
@@ -306,7 +443,22 @@ mod tests {
     #[test]
     fn destination_uses_source_file_name() {
         let dest = destination_for(Path::new(r"C:\out"), Path::new(r"C:\in\file.txt")).unwrap();
-        assert_eq!(dest, PathBuf::from(r"C:\out\file.txt"));
+        assert_eq!(dest, Path::new(r"C:\out").join("file.txt"));
+    }
+
+    #[test]
+    fn link_kind_conversions_and_titles() {
+        for kind in [
+            LinkKind::Symbolic,
+            LinkKind::RelativeSymbolic,
+            LinkKind::Junction,
+            LinkKind::HardLink,
+        ] {
+            assert_eq!(LinkKind::from_cli_name(kind.cli_name()), Some(kind));
+            assert_eq!(LinkKind::from_drop_subcommand(kind.drop_subcommand()), Some(kind));
+            assert!(!kind.drop_title().is_empty());
+            assert!(!kind.create_title().is_empty());
+        }
     }
 
     #[test]

@@ -30,9 +30,14 @@ This repository is LSENext, a Windows 11-oriented Link Shell Extension successor
 - Alpha tag is computed as `v<version>-alpha.<next>` where `<version>` is the `$version` variable in `alpha.yml`.
 - After publishing a stable release, bump `$version` in `alpha.yml` to the next minor/patch version.
 
+### Beta pre-release
+
+1. Create and push a tag: `git tag vX.Y.Z-beta.N && git push origin vX.Y.Z-beta.N`.
+2. `.github/workflows/release.yml` triggers automatically: builds and publishes a GitHub pre-release without deleting previous pre-releases.
+
 ### Stable release
 
-1. Bump `version` in workspace `Cargo.toml` and all version strings (`lsenext-shell/src/lib.rs`, `lsenext-helper/src/main.rs`).
+1. Bump `version` in workspace `Cargo.toml`.
 2. Update `$version` in `.github/workflows/alpha.yml` to the next development version.
 3. Commit and push to `main`.
 4. Create and push a tag: `git tag vX.Y.Z && git push origin vX.Y.Z`.
@@ -43,8 +48,8 @@ This repository is LSENext, a Windows 11-oriented Link Shell Extension successor
 - `Cargo.toml` → `workspace.package.version`
 - `.github/workflows/alpha.yml` → `$version` (next dev version)
 - `.github/workflows/release.yml` → uses `${{ github.ref_name }}` dynamically (no change needed)
-- `crates/lsenext-shell/src/lib.rs` → `LSENextVersion()` string
-- `crates/lsenext-helper/src/main.rs` → `show_about()` string
+- `crates/lsenext-shell/src/lib.rs` → automatically uses `env!("CARGO_PKG_VERSION")`
+- `crates/lsenext-helper/src/main.rs` → automatically uses `env!("CARGO_PKG_VERSION")`
 
 ## Build targets
 
