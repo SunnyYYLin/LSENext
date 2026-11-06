@@ -17,7 +17,7 @@ pub fn show_message(title: &str, message: &str, is_error: bool) {
     let message_wide = wide_null(message);
     let style = MB_OK | if is_error { MB_ICONERROR } else { 0 };
     unsafe {
-        MessageBoxW(0, message_wide.as_ptr(), title_wide.as_ptr(), style);
+        MessageBoxW(std::ptr::null_mut(), message_wide.as_ptr(), title_wide.as_ptr(), style);
     }
 }
 

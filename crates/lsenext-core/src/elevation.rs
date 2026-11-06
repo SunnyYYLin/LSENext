@@ -33,7 +33,7 @@ pub fn run_elevated(exe: &Path, args: &str) -> Result<(), std::io::Error> {
 
     let result = unsafe {
         ShellExecuteW(
-            0,
+            std::ptr::null_mut(),
             verb.as_ptr(),
             file.as_ptr(),
             params.as_ptr(),
