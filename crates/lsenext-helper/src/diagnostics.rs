@@ -268,6 +268,20 @@ pub fn build_diagnostics() -> String {
         &format!("current_exe: {:?}", env::current_exe()),
     );
     push_line(&mut output, &format!("install_root: {:?}", install_root));
+    push_line(
+        &mut output,
+        &format!(
+            "developer_mode_enabled: {}",
+            lsenext_core::is_developer_mode_enabled()
+        ),
+    );
+    push_line(
+        &mut output,
+        &format!(
+            "developer_mode_prompted: {}",
+            lsenext_core::has_prompted_developer_mode()
+        ),
+    );
     push_line(&mut output, &format!("state_path: {:?}", state_path));
     if let Some(path) = &state_path {
         push_line(&mut output, &format!("state_exists: {}", path.exists()));

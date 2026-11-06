@@ -39,6 +39,7 @@ pub fn register_package_identity() -> Result<()> {
     .context("failed to register LSENext package identity")?;
 
     notify_explorer_registration_changed();
+    lsenext_core::prompt_developer_mode_if_needed(false);
     Ok(())
 }
 

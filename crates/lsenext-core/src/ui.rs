@@ -29,3 +29,28 @@ pub fn show_message(title: &str, message: &str, is_error: bool) {
         println!("[{}] {}", title, message);
     }
 }
+
+#[cfg(windows)]
+pub fn ask_yes_no(title: &str, message: &str) -> bool {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        MessageBoxW, IDYES, MB_ICONQUESTION, MB_YESNO,
+    };
+    let title_wide = wide_null(title);
+    let message_wide = wide_null(message);
+    let style = MB_YESNO | MB_ICONQUESTION;
+    let result = unsafe {
+        MessageBoxW(
+            std::ptr::null_mut(),
+            message_wide.as_ptr(),
+            title_wide.as_ptr(),
+            style,
+        )
+    };
+    result == IDYES
+}
+
+#[cfg(not(windows))]
+pub fn ask_yes_no(title: &str, message: &str) -> bool {
+    println!("[{}] {}", title, message);
+    false
+}

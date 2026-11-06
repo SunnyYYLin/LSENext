@@ -6,7 +6,8 @@ mod registration;
 
 use anyhow::{bail, Context, Result};
 use lsenext_core::{
-    clear_state, elevate_create, execute_batch, load_state, save_sources, show_error, show_info,
+    ask_yes_no, clear_state, elevate_create, execute_batch, is_developer_mode_enabled, load_state,
+    open_developer_settings, prompt_developer_mode_if_needed, save_sources, show_error, show_info,
     BatchLinkError, LinkKind, PickedSource,
 };
 use registration::{
@@ -71,6 +72,12 @@ fn run() -> Result<()> {
         "about" => {
             show_about();
         }
+        "check-dev-mode" => {
+            prompt_developer_mode_if_needed(true);
+        }
+        "open-dev-settings" => {
+            let _ = open_developer_settings();
+        }
         #[cfg(feature = "diagnostics")]
         "diagnostics" => {
             diagnostics::show_diagnostics()?;
@@ -100,7 +107,7 @@ fn run() -> Result<()> {
             unregister_package_identity()?;
         }
         _ => {
-            bail!("usage: lsenext-helper <pick-source|drop-symlink|drop-relative-symlink|drop-junction|drop-hardlink|create-links|clear|about|register-package|prepare-machine-registration|trust-package-certificate-machine|unregister-package> [paths]");
+            bail!("usage: lsenext-helper <pick-source|drop-symlink|drop-relative-symlink|drop-junction|drop-hardlink|create-links|clear|about|check-dev-mode|open-dev-settings|register-package|prepare-machine-registration|trust-package-certificate-machine|unregister-package> [paths]");
         }
     }
     Ok(())
@@ -154,10 +161,28 @@ fn create_links(kind: LinkKind, target: &Path, sources: &[PathBuf]) -> Result<()
 }
 
 fn show_about() {
-    show_info(&format!(
-        "LSENext {}\nQuick symbolic, hard link, and directory junction creation.",
-        env!("CARGO_PKG_VERSION")
-    ));
+    let dev_mode = is_developer_mode_enabled();
+    let dev_status = if dev_mode {
+        "Developer Mode: Enabled (Symbolic links require no UAC)"
+    } else {
+        "Developer Mode: Disabled (Enable in Settings for no-UAC symbolic links)"
+    };
+    let base_info = format!(
+        "LSENext {}\nQuick symbolic, hard link, and directory junction creation.\n\n{}",
+        env!("CARGO_PKG_VERSION"),
+        dev_status,
+    );
+    if !dev_mode {
+        let question = format!(
+            "{}\n\nWould you like to open Windows Settings to enable Developer Mode now?",
+            base_info,
+        );
+        if ask_yes_no("LSENext", &question) {
+            let _ = open_developer_settings();
+        }
+    } else {
+        show_info(&base_info);
+    }
 }
 
 enum AliasAction {
